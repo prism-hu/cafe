@@ -1,25 +1,124 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cafe</title>
-  <style>
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      font-family: system-ui, sans-serif;
-      background: #f5f0e8;
-      color: #3a2e22;
-    }
-    h1 { font-size: 3rem; letter-spacing: 0.1em; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PRISM-HU サイエンスカフェ ご案内</title>
+<!-- GitHub Pages 公開用スタンドアロン。cafe-lp.block.html（WordPressカスタムHTML用の断片）を
+     doctype/head と大見出しでラップしたもの。中身（文面・カレンダー・ロゴ・メール難読化）は同一。 -->
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background:#eef2f7; color:#1f2937; font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic','Meiryo',sans-serif; line-height:1.8; -webkit-text-size-adjust:100%; }
+  .page { max-width:860px; margin:0 auto; padding:24px 20px 56px; }
+  .card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; box-shadow:0 12px 40px rgba(15,23,42,.08); padding:28px 26px 30px; }
+  .lp-head { display:flex; align-items:center; gap:12px; margin:4px 0 18px; }
+  .lp-dots { display:inline-flex; gap:6px; flex:none; }
+  .lp-dots span { width:12px; height:12px; border-radius:999px; display:inline-block; }
+  .lp-dots span:nth-child(1){ background:#6aa6f0; } .lp-dots span:nth-child(2){ background:#7bd1b0; } .lp-dots span:nth-child(3){ background:#f4a6c0; }
+  .lp-title { margin:0; color:#143a6d; font-size:26px; font-weight:800; letter-spacing:.02em; line-height:1.4; }
+  @media (max-width:480px){ .card{ padding:22px 16px 24px; border-radius:12px; } .lp-title{ font-size:22px; } }
+</style>
 </head>
 <body>
-  <main>
-    <h1>Cafe</h1>
-  </main>
+  <div class="page">
+    <div class="card">
+      <header class="lp-head">
+        <span class="lp-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+        <h1 class="lp-title">サイエンスカフェ</h1>
+      </header>
+<!--
+  ============================================================
+  PRISM-HU サイエンスカフェ 案内LP（WordPress カスタムHTML 用）
+  - 用途: サイネージのドア掲示 QR の飛び先。学外公開ルートサイト
+    （prism-hu.med.hokudai.ac.jp）の固定ページのカスタムHTMLブロックに丸ごと貼る。
+  - スコープ: #prism-cafe-lp。装飾はテーマに負けないよう全てインラインstyle。
+  - 大見出しはテーマのページタイトルに任せる（固定ページのタイトルと重複させないため、ブロックには含めない）。
+  - ロゴは base64 で内包（メディアへのアップロード不要。差し替えは brand/prism-hu/logo/H_en.png から）。
+  - 文面・カレンダー・問い合わせ先は正本 prism-support-site/cafe-section.block.html と揃える。
+  ============================================================
+-->
+<div id="prism-cafe-lp" style="max-width:860px; margin:0 auto; color:#1f2937; line-height:1.8; font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;">
+
+  <!-- リード -->
+  <div style="position:relative; display:flex !important; flex-wrap:wrap; align-items:center; gap:18px 30px; margin:0 !important; padding:22px 0 24px 20px !important; border-top:1px solid #e8edf4 !important; border-bottom:1px solid #e8edf4 !important;">
+    <span aria-hidden="true" style="position:absolute !important; left:0; top:22px; bottom:24px; width:4px; border-radius:999px; background:linear-gradient(180deg,#6aa6f0 0%,#7bd1b0 55%,#f4a6c0 100%);"></span>
+    <div style="flex:1 1 340px; min-width:0;">
+      <p style="display:flex !important; align-items:center; gap:8px; margin:0 0 8px 0 !important; padding:0 !important; color:#1e4d8c !important; font-size:12px !important; font-weight:800 !important; letter-spacing:.08em !important; line-height:1.5 !important;"><span aria-hidden="true" style="display:inline-block; flex:none; width:28px; height:2px; border-radius:999px; background:#1e4d8c;"></span>PRISM-HU サイエンスカフェ</p>
+      <p style="margin:0 !important; padding:0 !important; color:#143a6d !important; font-size:24px !important; font-weight:800 !important; line-height:1.55 !important;">コーヒー片手に、雑談から始める。</p>
+    </div>
+    <p style="flex:1 1 300px; min-width:0; margin:0 !important; padding:0 !important; color:#1f2937 !important; font-size:15px !important; font-weight:400 !important; line-height:1.95 !important;">研究者が気軽に集う、学内のオープンスペースです。コーヒー片手のちょっとしたお喋りが、新しいプロジェクトや研究の糸口につながる——そんな場を目指しています。ランチや小休憩はもちろん、いつもと違う環境でひとり思索にふけるだけでも、どうぞ自由にお使いください。</p>
+  </div>
+
+  <!-- 利用案内 -->
+  <div style="margin:28px 0 0 !important; padding:22px 0 0 !important; border-top:1px solid #e8edf4 !important;">
+    <p style="margin:0 0 14px 0 !important; padding:0 !important; color:#143a6d !important; font-size:17px !important; font-weight:800 !important; line-height:1.5 !important;">利用案内</p>
+    <div>
+      <div style="margin:0 0 14px 0 !important; padding:0 0 0 12px !important; border-left:3px solid #7bd1b0 !important;">
+        <p style="margin:0 0 2px 0 !important; padding:0 !important; color:#1e4d8c !important; font-weight:800 !important; font-size:14px !important; line-height:1.6 !important;">ご利用対象</p>
+        <p style="margin:0 !important; padding:0 !important; color:#1f2937 !important; font-weight:400 !important; font-size:14px !important; line-height:1.75 !important;">PRISM-HU の関係者、医学研究に携わる医学研究院・北海道大学病院の教職員および大学院生の皆さま。学部学生の方も、指導教員とご一緒であればぜひどうぞ。</p>
+      </div>
+      <div style="margin:0 0 14px 0 !important; padding:0 0 0 12px !important; border-left:3px solid #7bd1b0 !important;">
+        <p style="margin:0 0 2px 0 !important; padding:0 !important; color:#1e4d8c !important; font-weight:800 !important; font-size:14px !important; line-height:1.6 !important;">場所・利用時間</p>
+        <p style="margin:0 !important; padding:0 !important; color:#1f2937 !important; font-weight:400 !important; font-size:14px !important; line-height:1.75 !important;">医学部中研究棟2F ／ 平日 7:30〜20:00（警備員の巡回タイミングにより前後する場合があります）</p>
+      </div>
+      <div style="margin:0 0 14px 0 !important; padding:0 0 0 12px !important; border-left:3px solid #7bd1b0 !important;">
+        <p style="margin:0 0 2px 0 !important; padding:0 !important; color:#1e4d8c !important; font-weight:800 !important; font-size:14px !important; line-height:1.6 !important;">過ごし方</p>
+        <p style="margin:0 !important; padding:0 !important; color:#1f2937 !important; font-weight:400 !important; font-size:14px !important; line-height:1.75 !important;">打ち合わせ・ランチ・休憩など自由にお使いください。ドリップコーヒーとティーバッグをご用意しています。備え付けのケトルで各自淹れてください。飲酒は原則禁止です（貸し切りイベント時は解禁）。大きなゴミや、缶、ビン、ペットボトルは廊下のゴミ箱に捨ててください。</p>
+      </div>
+      <div style="margin:0 !important; padding:0 0 0 12px !important; border-left:3px solid #7bd1b0 !important;">
+        <p style="margin:0 0 2px 0 !important; padding:0 !important; color:#1e4d8c !important; font-weight:800 !important; font-size:14px !important; line-height:1.6 !important;">貸し切り利用</p>
+        <p style="margin:0 !important; padding:0 !important; color:#1f2937 !important; font-weight:400 !important; font-size:14px !important; line-height:1.75 !important;">ミーティングや懇親会、ハッカソン等での貸し切りも歓迎です。お申し込みは下記 PRISM-HU 事務局まで。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 開催予定 -->
+  <div style="margin:28px 0 0 !important; padding:22px 0 0 !important; border-top:1px solid #e8edf4 !important;">
+    <p style="margin:0 0 14px 0 !important; padding:0 !important; color:#143a6d !important; font-size:17px !important; font-weight:800 !important; line-height:1.5 !important;">開催予定</p>
+    <div style="border:1px solid #d7dde7 !important; border-radius:8px !important; overflow:hidden; background:#fff !important; box-shadow:0 8px 24px rgba(15,23,42,.06);">
+      <iframe
+        title="サイエンスカフェ 開催予定カレンダー"
+        loading="lazy"
+        width="100%"
+        height="600"
+        frameborder="0"
+        style="display:block !important; width:100% !important; height:600px !important; min-height:0 !important; max-height:none !important; aspect-ratio:auto !important; border:0 !important;"
+        src="https://calendar.google.com/calendar/embed?mode=MONTH&amp;ctz=Asia%2FTokyo&amp;showTitle=0&amp;showNav=1&amp;showPrint=0&amp;showTabs=0&amp;showCalendars=0&amp;showTz=0&amp;wkst=2&amp;bgcolor=%23ffffff&amp;src=ec495493d88f2b68db4d7f5c953e10a72a1e714ebf06666b829988e9dfee9626%40group.calendar.google.com">
+      </iframe>
+    </div>
+  </div>
+
+  <!-- 問い合わせ -->
+  <div style="display:flex !important; flex-wrap:wrap; align-items:baseline; gap:6px 12px; margin:28px 0 0 !important; padding:14px 16px !important; border:1px solid #e8edf4 !important; border-radius:8px !important; background:#f7f9fc !important; font-size:14px !important;">
+    <span style="color:#64748b !important; font-weight:800 !important;">お問い合わせ・貸し切り申込</span>
+    <span style="color:#1f2937 !important;">PRISM-HU AI支援部門 事務局 <span class="cafe-mail" data-m="cHJpc20taHUtb2ZmaWNlQHBvcC5tZWQuaG9rdWRhaS5hYy5qcA==">（メールアドレスは JavaScript 有効時に表示）</span></span>
+  </div>
+
+  <!-- フッター（PRISM-HU ロゴ・明色背景用 H_en。単独配置・無改変） -->
+  <div style="text-align:center; margin:26px 0 0 !important; padding:0 !important;">
+    <img src="data:image/png;base64,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" alt="PRISM-HU" style="height:38px; width:auto; display:inline-block; opacity:.9;">
+    <div style="color:#94a3b8 !important; font-size:12px !important; margin-top:8px !important; line-height:1.7 !important;">北海道大学 医学研究院</div>
+  </div>
+
+  <!-- 問い合わせメールをJSで組み立て（HTMLソースに平文アドレス・@を残さないスパム対策） -->
+  <script>
+  (function(){
+    var els=document.querySelectorAll('#prism-cafe-lp .cafe-mail');
+    for(var i=0;i<els.length;i++){
+      var el=els[i], addr=atob(el.getAttribute('data-m'));
+      var a=document.createElement('a');
+      a.href='mailto:'+addr; a.textContent=addr;
+      a.style.cssText='color:#1e4d8c;font-weight:700;text-decoration:underline;text-underline-offset:2px;';
+      el.textContent=''; el.appendChild(a);
+    }
+  })();
+  </script>
+
+</div>
+
+    </div>
+  </div>
 </body>
 </html>
