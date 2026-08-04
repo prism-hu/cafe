@@ -7,7 +7,8 @@
 <!--
   ============================================================
   サイエンスカフェ サイネージシェル（ミニPC キオスク表示用）
-  - 通常時: slides/ の5枚（ポスター3枚＋日本語/英語ルール）をオートプレイ
+  - 通常時: slides/ に置かれた画像（001.jpg〜030.jpg のうち実在するもの）をオートプレイ。
+    枚数はコードに書かず起動時に探すので、画像を足す・消すだけで変えられる（欠番があってもよい）
   - 貸切時: door-notice.html を全画面 iframe 表示
   - オープン開催時: event-notice.html を全画面 iframe 表示
   - 臨時URL指定時: 管理シート B3 に貼られた URL を全画面 iframe 表示（埋め込み拒否のサイトは黒画面になる）
@@ -37,26 +38,53 @@
   var SLIDE_MS = 20000;                  // 1枚あたりの表示時間
   var POLL_MS = 120000;                  // 表示モードの問い合わせ間隔
   var RELOAD_MS = 24 * 60 * 60 * 1000;   // 通常表示中の定期リロード間隔
-  var SLIDES = ['slides/001.jpg', 'slides/002.jpg', 'slides/003.jpg',
-                'slides/004.jpg', 'slides/005.jpg'];
+  var MAX_SLIDES = 30;                   // slides/001.jpg〜030.jpg まで探す（USB運用の命名規則に合わせた上限）
   var API_URL = new URLSearchParams(location.search).get('api') || '';
 
   var slidesEl = document.getElementById('slides');
   var noticeEl = document.getElementById('notice');
 
-  var imgs = SLIDES.map(function (src) {
-    var img = document.createElement('img');
-    img.src = src;
-    slidesEl.appendChild(img);
-    return img;
-  });
-  var idx = 0;
-  imgs[0].classList.add('show');
-  setInterval(function () {
-    imgs[idx].classList.remove('show');
-    idx = (idx + 1) % imgs.length;
-    imgs[idx].classList.add('show');
-  }, SLIDE_MS);
+  // ポスターの一覧はコードに持たず、slides/ に実在するものを起動時に探して使う。
+  // 事務室が画像を置く・消すだけで枚数を変えられるようにするため。欠番があっても詰めずに動く
+  // （002 を消せば 001, 003, 004... の順で回る。番号の振り直しは不要）。
+  function findSlides(done) {
+    var found = [];
+    var remaining = MAX_SLIDES;
+    function finish() {
+      if (--remaining > 0) return;
+      found.sort(function (a, b) { return a.n - b.n; });
+      done(found.map(function (s) { return s.src; }));
+    }
+    for (var i = 1; i <= MAX_SLIDES; i++) {
+      (function (n) {
+        var src = 'slides/' + ('00' + n).slice(-3) + '.jpg';
+        var probe = new Image();
+        probe.onload = function () { found.push({ n: n, src: src }); finish(); };
+        probe.onerror = finish;
+        probe.src = src;
+      })(i);
+    }
+  }
+
+  function startSlideshow(sources) {
+    if (!sources.length) return;  // 1枚も無ければ黒画面のまま。掲示への切替は動き続ける
+    var imgs = sources.map(function (src) {
+      var img = document.createElement('img');
+      img.src = src;
+      slidesEl.appendChild(img);
+      return img;
+    });
+    var idx = 0;
+    imgs[0].classList.add('show');
+    if (imgs.length === 1) return;  // 1枚だけなら切り替えない
+    setInterval(function () {
+      imgs[idx].classList.remove('show');
+      idx = (idx + 1) % imgs.length;
+      imgs[idx].classList.add('show');
+    }, SLIDE_MS);
+  }
+
+  findSlides(startSlideshow);
 
   var mode = 'normal';
   var overrideUrl = null;
