@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>サイネージ - サイエンスカフェ</title>
+<!--
+  ============================================================
+  サイエンスカフェ サイネージシェル（ミニPC キオスク表示用）
+  - 通常時: slides/ の5枚（ポスター3枚＋日本語/英語ルール）をオートプレイ
+  - 貸切時: door-notice.html を全画面 iframe 表示
+  - オープン開催時: event-notice.html を全画面 iframe 表示
+  - 臨時URL指定時: 管理シート B3 に貼られた URL を全画面 iframe 表示（埋め込み拒否のサイトは黒画面になる）
+  - 表示モードは GAS Web アプリ（doGet）を 2 分毎にポーリングして取得。
+    API URL は起動 URL の ?api= で渡す（例: /signage/?api=https://script.google.com/.../exec）
+  - ネット断・API 障害時は最後の表示を維持（掲示が突然消える事故を防ぐ）
+  - 通常表示中に 24 時間経過したらリロードし、ポスター差し替えを取り込む
+  ============================================================
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+  .layer { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: none; }
+  .layer.active { display: block; }
+  #slides img {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: contain; opacity: 0; transition: opacity 1s;
+  }
+  #slides img.show { opacity: 1; }
+</style>
+</head>
+<body>
+  <div id="slides" class="layer active"></div>
+  <iframe id="notice" class="layer" title="掲示"></iframe>
+<script>
+(function () {
+  var SLIDE_MS = 20000;                  // 1枚あたりの表示時間
+  var POLL_MS = 120000;                  // 表示モードの問い合わせ間隔
+  var RELOAD_MS = 24 * 60 * 60 * 1000;   // 通常表示中の定期リロード間隔
+  var SLIDES = ['slides/001.jpg', 'slides/002.jpg', 'slides/003.jpg',
+                'slides/004.jpg', 'slides/005.jpg'];
+  var API_URL = new URLSearchParams(location.search).get('api') || '';
+
+  var slidesEl = document.getElementById('slides');
+  var noticeEl = document.getElementById('notice');
+
+  var imgs = SLIDES.map(function (src) {
+    var img = document.createElement('img');
+    img.src = src;
+    slidesEl.appendChild(img);
+    return img;
+  });
+  var idx = 0;
+  imgs[0].classList.add('show');
+  setInterval(function () {
+    imgs[idx].classList.remove('show');
+    idx = (idx + 1) % imgs.length;
+    imgs[idx].classList.add('show');
+  }, SLIDE_MS);
+
+  var mode = 'normal';
+  var overrideUrl = null;
+  var loadedAt = Date.now();
+
+  function noticeSrc() {
+    if (mode === 'private') return 'door-notice.html';
+    if (mode === 'open') return 'event-notice.html';
+    return overrideUrl; // override
+  }
+
+  function apply(nextMode, nextUrl) {
+    if (nextMode === mode && nextUrl === overrideUrl) return;
+    mode = nextMode;
+    overrideUrl = nextUrl;
+    if (mode === 'normal') {
+      noticeEl.classList.remove('active');
+      noticeEl.removeAttribute('src');
+      slidesEl.classList.add('active');
+    } else {
+      noticeEl.src = noticeSrc();
+      slidesEl.classList.remove('active');
+      noticeEl.classList.add('active');
+    }
+  }
+
+  function poll() {
+    if (!API_URL) return; // api パラメータなし＝常に通常表示（ローカル確認用）
+    fetch(API_URL, { redirect: 'follow', cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        // 臨時URLは GAS 側でも検証済みだが、匿名 API のため表示側でも https:// を再確認する
+        if (j.mode === 'override' && typeof j.overrideUrl === 'string' &&
+            j.overrideUrl.indexOf('https://') === 0) {
+          apply('override', j.overrideUrl);
+        } else if (j.mode === 'private' || j.mode === 'open' || j.mode === 'normal') {
+          apply(j.mode, null);
+        }
+        if (mode === 'normal' && Date.now() - loadedAt > RELOAD_MS) location.reload();
+      })
+      .catch(function () { /* ネット断時は最後の表示を維持 */ });
+  }
+  poll();
+  setInterval(poll, POLL_MS);
+})();
+</script>
+</body>
+</html>
