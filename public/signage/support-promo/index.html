@@ -1,0 +1,1211 @@
+<!doctype html>
+<!-- signage-slide -->
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PRISM-HU SUPPORT デジタルサイネージ試作</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #143a6d;
+      --ink-deep: #0b2850;
+      --blue: #1f5aa6;
+      --blue-bright: #327bd1;
+      --blue-pale: #eaf3ff;
+      --mint: #7bd1b0;
+      --pink: #f4a6c0;
+      --coral: #ed6f8f;
+      --paper: #ffffff;
+      --text: #1f2937;
+      --muted: #64748b;
+      --line: #d9e4f1;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #0b2850;
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      position: relative;
+    }
+
+    #stage {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 1080px;
+      height: 1920px;
+      aspect-ratio: 9 / 16;
+      flex: 0 0 auto;
+      container-type: inline-size;
+      transform: translate(-50%, -50%) scale(1);
+      transform-origin: center;
+      overflow: hidden;
+      isolation: isolate;
+      background:
+        radial-gradient(circle at 84% 14%, rgba(123, 209, 176, .35), transparent 24%),
+        radial-gradient(circle at 12% 86%, rgba(244, 166, 192, .28), transparent 25%),
+        linear-gradient(155deg, #f8fbff 0%, #edf5ff 54%, #f9f5fb 100%);
+      color: var(--text);
+    }
+
+    .scene {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+      will-change: opacity, transform;
+    }
+
+    .ambient {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      opacity: .82;
+    }
+
+    .orb {
+      position: absolute;
+      border-radius: 999px;
+      filter: blur(1px);
+      opacity: .6;
+    }
+
+    .orb.one {
+      width: 34%;
+      aspect-ratio: 1;
+      right: -12%;
+      top: 15%;
+      background: rgba(123, 209, 176, .36);
+    }
+
+    .orb.two {
+      width: 42%;
+      aspect-ratio: 1;
+      left: -18%;
+      bottom: 8%;
+      background: rgba(106, 166, 240, .28);
+    }
+
+    .orb.three {
+      width: 24%;
+      aspect-ratio: 1;
+      right: 9%;
+      bottom: 4%;
+      background: rgba(244, 166, 192, .34);
+    }
+
+    .brand-chip {
+      position: absolute;
+      top: 3.3%;
+      left: 6.7%;
+      right: 6.7%;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      min-height: 74px;
+      padding: 17px 22px;
+      border: 1px solid rgba(20, 58, 109, .12);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, .88);
+      box-shadow: 0 14px 42px rgba(15, 52, 98, .11);
+      backdrop-filter: blur(12px);
+    }
+
+    .brand-chip img {
+      display: block;
+      width: 38%;
+      height: auto;
+    }
+
+    .brand-chip span {
+      color: var(--ink);
+      font-size: clamp(12px, 1.75cqw, 22px);
+      font-weight: 800;
+      letter-spacing: .04em;
+      white-space: nowrap;
+    }
+
+    .mini-qr {
+      position: absolute;
+      right: 5.6%;
+      bottom: 4.1%;
+      z-index: 60;
+      width: 18%;
+      padding: 9px 9px 10px;
+      border: 1px solid rgba(20, 58, 109, .18);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, .96);
+      box-shadow: 0 10px 34px rgba(15, 52, 98, .14);
+      opacity: 0;
+      transform: translateY(12px) scale(.96);
+    }
+
+    .mini-qr img,
+    .final-qr img {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #fff;
+    }
+
+    .mini-qr span {
+      display: block;
+      margin-top: 4px;
+      color: var(--ink);
+      font-size: clamp(8px, 1.1cqw, 13px);
+      font-weight: 900;
+      line-height: 1.25;
+      text-align: center;
+      letter-spacing: .04em;
+    }
+
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0 0 24px;
+      color: var(--blue);
+      font-size: clamp(16px, 2.25cqw, 29px);
+      font-weight: 900;
+      letter-spacing: .08em;
+    }
+
+    .kicker::before {
+      content: "";
+      width: 42px;
+      height: 4px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--blue), var(--mint));
+    }
+
+    .intro {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 12% 7% 10%;
+      color: white;
+      background:
+        radial-gradient(circle at 80% 14%, rgba(123, 209, 176, .62), transparent 25%),
+        radial-gradient(circle at 8% 90%, rgba(244, 166, 192, .46), transparent 28%),
+        linear-gradient(145deg, #0b2850 0%, #174d91 48%, #2468b8 100%);
+    }
+
+    .intro::before,
+    .intro::after {
+      content: "";
+      position: absolute;
+      border: 2px solid rgba(255, 255, 255, .12);
+      border-radius: 50%;
+    }
+
+    .intro::before {
+      width: 780px;
+      height: 780px;
+      right: -510px;
+      top: 190px;
+    }
+
+    .intro::after {
+      width: 560px;
+      height: 560px;
+      left: -390px;
+      bottom: 110px;
+    }
+
+    .intro-card {
+      position: relative;
+      z-index: 2;
+      padding: 62px 54px 66px;
+      border: 1px solid rgba(255, 255, 255, .2);
+      border-radius: 44px;
+      background: rgba(255, 255, 255, .1);
+      box-shadow: 0 30px 90px rgba(0, 21, 54, .28);
+      backdrop-filter: blur(18px);
+    }
+
+    .intro-mark {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 42px;
+      font-size: clamp(14px, 2cqw, 26px);
+      font-weight: 900;
+      letter-spacing: .12em;
+    }
+
+    .intro-mark i {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--mint);
+      box-shadow: 27px 0 0 var(--pink), 54px 0 0 #80b8f5;
+      margin-right: 55px;
+    }
+
+    .intro h1 {
+      margin: 0;
+      font-size: clamp(42px, 6.1cqw, 78px);
+      font-weight: 900;
+      line-height: 1.32;
+      letter-spacing: .015em;
+      word-break: keep-all;
+      overflow-wrap: normal;
+    }
+
+    .intro h1 strong {
+      display: block;
+      margin: 20px 0 6px;
+      color: #fff;
+      font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+      font-size: 1em;
+      letter-spacing: .015em;
+      white-space: nowrap;
+      text-shadow: 0 8px 28px rgba(0, 28, 78, .25);
+    }
+
+    .intro-question {
+      display: block;
+      white-space: nowrap;
+    }
+
+    .intro-line {
+      width: 0;
+      height: 8px;
+      margin-top: 42px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--mint), #82b7f4 55%, var(--pink));
+    }
+
+    .nav-scene,
+    .support-scene,
+    .features-scene,
+    .admin-scene,
+    .final-scene {
+      padding: 13.5% 6.2% 6.2%;
+    }
+
+    .scene-title {
+      margin: 0;
+      color: var(--ink-deep);
+      font-size: clamp(36px, 5.2cqw, 66px);
+      font-weight: 900;
+      line-height: 1.28;
+      letter-spacing: .01em;
+      word-break: keep-all;
+      overflow-wrap: normal;
+    }
+
+    .text-line {
+      display: block;
+      white-space: nowrap;
+    }
+
+    .scene-lead {
+      margin: 16px 0 0;
+      color: var(--muted);
+      font-size: clamp(18px, 2.35cqw, 30px);
+      font-weight: 700;
+      line-height: 1.6;
+    }
+
+    .browser {
+      position: relative;
+      overflow: hidden;
+      margin-top: 38px;
+      border: 1px solid rgba(20, 58, 109, .16);
+      border-radius: 28px;
+      background: white;
+      box-shadow: 0 24px 70px rgba(15, 52, 98, .18);
+    }
+
+    .browser-bar {
+      position: relative;
+      z-index: 4;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 44px;
+      padding: 0 18px;
+      background: #f2f6fb;
+      border-bottom: 1px solid #dce6f1;
+    }
+
+    .browser-bar i {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #e990a6;
+      box-shadow: 19px 0 0 #e8bd66, 38px 0 0 #75c8a8;
+    }
+
+    .browser-bar span {
+      min-width: 0;
+      margin-left: 44px;
+      overflow: hidden;
+      color: #63748b;
+      font-size: clamp(9px, 1.15cqw, 14px);
+      font-weight: 700;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .browser-view {
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      background: #eaf1f8;
+    }
+
+    .nav-browser .browser-view { aspect-ratio: 1.6 / 1; }
+    .support-browser .browser-view,
+    .features-browser .browser-view { aspect-ratio: 1.14 / 1; }
+
+    .screen-content {
+      position: absolute;
+      inset: 0;
+      transform-origin: center;
+      will-change: transform;
+    }
+
+    .screen-content img.page-shot {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .screen-content img.news-shot {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      object-position: 50% 0;
+      opacity: 0;
+    }
+
+    .nav-screen img.page-shot {
+      object-fit: contain;
+      object-position: 50% 0;
+    }
+
+    .nav-ring,
+    .page-ring {
+      position: absolute;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .nav-ring {
+      left: 78.3%;
+      top: 1.6%;
+      width: 16.8%;
+      height: 10.8%;
+    }
+
+    .nav-ring ellipse,
+    .page-ring ellipse {
+      fill: none;
+      stroke: var(--coral);
+      stroke-linecap: round;
+      stroke-width: 8;
+      stroke-dasharray: 900;
+      stroke-dashoffset: 900;
+      filter: drop-shadow(0 2px 2px rgba(145, 42, 71, .12));
+    }
+
+    .cursor {
+      position: absolute;
+      left: 87.5%;
+      top: 12%;
+      z-index: 2;
+      width: 32px;
+      height: 42px;
+      opacity: 0;
+      transform: translate(22px, 36px) rotate(-15deg);
+      filter: drop-shadow(0 4px 5px rgba(0, 20, 55, .34));
+    }
+
+    .cursor::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: white;
+      clip-path: polygon(0 0, 0 84%, 25% 63%, 42% 100%, 60% 91%, 43% 56%, 76% 55%);
+    }
+
+    .cursor::after {
+      content: "";
+      position: absolute;
+      inset: 4px;
+      background: var(--ink-deep);
+      clip-path: polygon(0 0, 0 76%, 24% 56%, 42% 94%, 53% 88%, 36% 50%, 66% 50%);
+    }
+
+    .click-wave {
+      position: absolute;
+      left: 86.2%;
+      top: 4.6%;
+      width: 52px;
+      height: 52px;
+      border: 4px solid var(--coral);
+      border-radius: 50%;
+      opacity: 0;
+      transform: scale(.4);
+    }
+
+    .nav-hint {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 30px;
+      padding: 22px 26px;
+      border-radius: 22px;
+      background: var(--ink);
+      color: white;
+      font-size: clamp(20px, 2.75cqw, 35px);
+      font-weight: 900;
+      line-height: 1.45;
+      box-shadow: 0 18px 45px rgba(20, 58, 109, .2);
+    }
+
+    .nav-hint b {
+      color: #bdebd8;
+      font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+      letter-spacing: .03em;
+    }
+
+    .nav-hint .arrow {
+      margin-left: auto;
+      font-size: 1.45em;
+      line-height: 1;
+    }
+
+    .support-scene .scene-title {
+      font-size: clamp(30px, 4.4cqw, 56px);
+    }
+
+    .support-browser {
+      margin-top: 28px;
+    }
+
+    .support-screen img.page-shot,
+    .features-screen img.page-shot {
+      object-position: 50% 0;
+    }
+
+    .llens-ring {
+      left: 50.2%;
+      top: 47.6%;
+      width: 49.3%;
+      height: 27.5%;
+    }
+
+    .type-card {
+      position: relative;
+      z-index: 5;
+      margin-top: 24px;
+      min-height: 320px;
+      padding: 30px 34px 34px;
+      border: 1px solid rgba(20, 58, 109, .14);
+      border-left: 8px solid var(--mint);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, .96);
+      box-shadow: 0 18px 50px rgba(15, 52, 98, .13);
+    }
+
+    .type-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 20px;
+      color: var(--ink);
+      font-size: clamp(17px, 2.1cqw, 27px);
+      font-weight: 900;
+      letter-spacing: .06em;
+    }
+
+    .type-label .alpha {
+      padding: 7px 13px;
+      border-radius: 999px;
+      background: #fce6ee;
+      color: #c2416c;
+      font-size: .77em;
+      white-space: nowrap;
+    }
+
+    .type-line {
+      min-height: 1.55em;
+      margin: 4px 0;
+      color: var(--ink-deep);
+      font-size: clamp(25px, 3.75cqw, 48px);
+      font-weight: 900;
+      line-height: 1.55;
+      letter-spacing: .005em;
+      white-space: nowrap;
+    }
+
+    .type-line.typing::after,
+    .feature-copy.typing::after {
+      content: "";
+      display: inline-block;
+      width: .12em;
+      height: 1.05em;
+      margin-left: .12em;
+      vertical-align: -.12em;
+      border-radius: 999px;
+      background: var(--coral);
+      animation: blink .7s steps(1) infinite;
+    }
+
+    @keyframes blink {
+      0%, 48% { opacity: 1; }
+      49%, 100% { opacity: 0; }
+    }
+
+    .recruit {
+      position: absolute;
+      z-index: 12;
+      left: 6%;
+      right: 27%;
+      bottom: 8%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      padding: 30px 28px;
+      border: 3px solid rgba(255, 255, 255, .7);
+      border-radius: 999px;
+      color: white;
+      background: linear-gradient(115deg, #d94f79, #ec7798);
+      box-shadow: 0 22px 60px rgba(167, 42, 80, .28);
+      font-size: clamp(25px, 3.15cqw, 41px);
+      font-weight: 900;
+      line-height: 1.25;
+      letter-spacing: .025em;
+      opacity: 0;
+      transform: translateY(28px) scale(.92);
+    }
+
+    .recruit i {
+      width: 17px;
+      height: 17px;
+      border-radius: 50%;
+      background: white;
+      box-shadow: 0 0 0 8px rgba(255, 255, 255, .18);
+    }
+
+    .features-scene .scene-title {
+      font-size: clamp(30px, 4.3cqw, 55px);
+    }
+
+    .features-browser {
+      margin-top: 27px;
+    }
+
+    .feature-ring-video {
+      left: 50.5%;
+      top: 23.2%;
+      width: 49.2%;
+      height: 24.5%;
+    }
+
+    .feature-ring-slide {
+      left: .2%;
+      top: 48.3%;
+      width: 49.2%;
+      height: 25.5%;
+    }
+
+    .feature-ring-links {
+      left: .2%;
+      top: 75.2%;
+      width: 49.2%;
+      height: 23.8%;
+    }
+
+    .feature-ring-news {
+      left: 29.2%;
+      top: 24.4%;
+      z-index: 3;
+      width: 13.5%;
+      height: 7.2%;
+    }
+
+    .feature-panel {
+      position: relative;
+      margin-top: 26px;
+      min-height: 300px;
+      padding: 30px 32px 34px;
+      overflow: hidden;
+      border: 1px solid rgba(20, 58, 109, .14);
+      border-radius: 26px;
+      background: rgba(255, 255, 255, .96);
+      box-shadow: 0 18px 50px rgba(15, 52, 98, .14);
+    }
+
+    .feature-count {
+      position: absolute;
+      right: 24px;
+      top: 17px;
+      color: rgba(31, 90, 166, .13);
+      font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+      font-size: clamp(66px, 10cqw, 126px);
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .feature-name {
+      position: relative;
+      z-index: 2;
+      margin: 0 0 18px;
+      color: var(--blue);
+      font-size: clamp(20px, 2.65cqw, 34px);
+      font-weight: 900;
+    }
+
+    .feature-copy {
+      position: relative;
+      z-index: 2;
+      min-height: 3em;
+      margin: 0;
+      color: var(--ink-deep);
+      font-size: clamp(28px, 4cqw, 50px);
+      font-weight: 900;
+      line-height: 1.48;
+      letter-spacing: .005em;
+      white-space: nowrap;
+    }
+
+    .feature-copy.long {
+      font-size: clamp(24px, 3.25cqw, 42px);
+    }
+
+    .feature-copy.news-copy {
+      max-width: 88%;
+      white-space: pre-line;
+    }
+
+    .admin-scene {
+      display: grid;
+      place-items: center;
+      padding: 14% 8% 9%;
+      background:
+        radial-gradient(circle at 85% 13%, rgba(123, 209, 176, .52), transparent 28%),
+        radial-gradient(circle at 7% 90%, rgba(244, 166, 192, .42), transparent 29%),
+        linear-gradient(155deg, #e9f4ff 0%, #f8fbff 47%, #fff5f9 100%);
+    }
+
+    .admin-card {
+      position: relative;
+      width: 100%;
+      padding: 78px 48px 82px;
+      border: 1px solid rgba(20, 58, 109, .12);
+      border-radius: 48px;
+      background: rgba(255, 255, 255, .94);
+      box-shadow: 0 30px 90px rgba(15, 52, 98, .16);
+      text-align: center;
+    }
+
+    .gears {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 18px;
+      margin-bottom: 42px;
+    }
+
+    .gear {
+      display: grid;
+      place-items: center;
+      width: 92px;
+      height: 92px;
+      border: 11px dotted var(--blue-bright);
+      border-radius: 50%;
+      color: var(--blue);
+      background: var(--blue-pale);
+      font-size: 34px;
+      font-weight: 900;
+    }
+
+    .gear.small {
+      width: 66px;
+      height: 66px;
+      border-width: 9px;
+      border-color: var(--mint);
+      color: #278466;
+      background: #eafaf4;
+      transform: translateY(16px) rotate(18deg);
+    }
+
+    .admin-card .eyebrow {
+      margin: 0 0 25px;
+      color: var(--blue);
+      font-size: clamp(17px, 2.1cqw, 27px);
+      font-weight: 900;
+      letter-spacing: .1em;
+    }
+
+    .admin-card h2 {
+      margin: 0;
+      color: var(--ink-deep);
+      font-size: clamp(42px, 6.2cqw, 78px);
+      font-weight: 900;
+      line-height: 1.4;
+      letter-spacing: .01em;
+      word-break: keep-all;
+    }
+
+    .admin-card h2 strong {
+      display: block;
+      margin-top: 14px;
+      color: var(--blue);
+      background: linear-gradient(transparent 68%, rgba(123, 209, 176, .55) 68%);
+    }
+
+    .final-scene {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 11% 8% 8%;
+      color: white;
+      background:
+        radial-gradient(circle at 77% 12%, rgba(123, 209, 176, .55), transparent 26%),
+        radial-gradient(circle at 15% 88%, rgba(244, 166, 192, .42), transparent 28%),
+        linear-gradient(148deg, #0b2850 0%, #154986 50%, #2264b3 100%);
+      text-align: center;
+    }
+
+    .final-logo {
+      width: 47%;
+      margin-bottom: 34px;
+      padding: 19px 24px;
+      border-radius: 22px;
+      background: white;
+      box-shadow: 0 16px 46px rgba(0, 20, 55, .2);
+    }
+
+    .final-logo img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .final-scene h2 {
+      margin: 0 0 28px;
+      font-size: clamp(34px, 5cqw, 64px);
+      font-weight: 900;
+      line-height: 1.36;
+      word-break: keep-all;
+    }
+
+    .final-scene h2 strong {
+      color: #c8f4e3;
+      font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+      font-size: 1.07em;
+    }
+
+    .final-qr {
+      width: 50%;
+      padding: 20px;
+      border-radius: 30px;
+      background: white;
+      box-shadow: 0 28px 80px rgba(0, 20, 55, .32);
+    }
+
+    .final-guide {
+      margin: 30px 0 0;
+      font-size: clamp(25px, 3.65cqw, 47px);
+      font-weight: 900;
+      line-height: 1.55;
+    }
+
+    .final-guide strong {
+      display: block;
+      color: #c8f4e3;
+      font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+      letter-spacing: .02em;
+    }
+
+    .bookmark-note {
+      margin: 20px 0 0;
+      padding: 15px 30px;
+      border-radius: 999px;
+      color: var(--ink-deep);
+      background: #c8f4e3;
+      box-shadow: 0 10px 28px rgba(0, 20, 55, .2);
+      font-size: clamp(22px, 3.1cqw, 39px);
+      font-weight: 900;
+      line-height: 1.3;
+      white-space: nowrap;
+    }
+
+    .final-url {
+      margin: 18px 0 0;
+      color: rgba(255, 255, 255, .78);
+      font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+      font-size: clamp(13px, 1.8cqw, 23px);
+      font-weight: 700;
+      letter-spacing: .03em;
+    }
+
+    .network-note {
+      margin-top: 24px;
+      padding: 10px 18px;
+      border: 1px solid rgba(255, 255, 255, .3);
+      border-radius: 999px;
+      color: rgba(255, 255, 255, .9);
+      background: rgba(255, 255, 255, .09);
+      font-size: clamp(13px, 1.8cqw, 23px);
+      font-weight: 800;
+    }
+
+    .preview-note {
+      position: absolute;
+      left: 12px;
+      bottom: 10px;
+      z-index: 100;
+      display: none;
+      padding: 6px 10px;
+      border-radius: 7px;
+      color: white;
+      background: rgba(0, 0, 0, .64);
+      font: 700 12px/1.2 monospace;
+    }
+
+    body.preview .preview-note { display: block; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .type-line.typing::after,
+      .feature-copy.typing::after { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <main id="stage" aria-label="PRISM-HU SUPPORT デジタルサイネージアニメーション">
+    <div class="ambient" aria-hidden="true">
+      <i class="orb one"></i>
+      <i class="orb two"></i>
+      <i class="orb three"></i>
+    </div>
+
+    <section class="scene intro" id="intro">
+      <div class="intro-card">
+        <div class="intro-mark"><i></i>RESEARCH SUPPORT</div>
+        <h1><strong>PRISM-HU SUPPORT</strong><span class="intro-question">をご存じですか？</span></h1>
+        <div class="intro-line" id="introLine"></div>
+      </div>
+    </section>
+
+    <section class="scene nav-scene" id="navScene">
+      <p class="kicker">アクセスの入口</p>
+      <h2 class="scene-title"><span class="text-line">PRISM-HUウェブサイトから</span><span class="text-line">アクセスできます</span></h2>
+      <div class="browser nav-browser">
+        <div class="browser-bar"><i></i><span>prism-hu.med.hokudai.ac.jp</span></div>
+        <div class="browser-view">
+          <div class="screen-content nav-screen" id="navScreen">
+            <img class="page-shot" src="assets/prism-top-desktop.png" alt="PRISM-HUウェブサイトTOPページ">
+            <svg class="nav-ring" viewBox="0 0 200 100" preserveAspectRatio="none" aria-hidden="true">
+              <ellipse id="navEllipse" cx="100" cy="50" rx="92" ry="39"></ellipse>
+            </svg>
+            <i class="cursor" id="navCursor" aria-hidden="true"></i>
+            <i class="click-wave" id="clickWave" aria-hidden="true"></i>
+          </div>
+        </div>
+      </div>
+      <div class="nav-hint"><span>右端の</span><b>PRISM SUPPORT</b><span class="arrow">→</span></div>
+    </section>
+
+    <section class="scene support-scene" id="supportScene">
+      <p class="kicker">研究支援の主役</p>
+      <h2 class="scene-title"><span class="text-line">まず知ってほしいのは、LLENS</span></h2>
+      <div class="browser support-browser">
+        <div class="browser-bar"><i></i><span>PRISM-HU SUPPORT ／ 研究支援</span></div>
+        <div class="browser-view">
+          <div class="screen-content support-screen" id="supportScreen">
+            <img class="page-shot" src="assets/prism-support-research.png" alt="PRISM-HU SUPPORT研究支援ページ">
+            <svg class="page-ring llens-ring" viewBox="0 0 300 180" preserveAspectRatio="none" aria-hidden="true">
+              <ellipse id="llensEllipse" cx="150" cy="90" rx="141" ry="78"></ellipse>
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div class="type-card">
+        <div class="type-label"><span>LLENS（アルファ版）</span><span class="alpha">ALPHA</span></div>
+        <p class="type-line" id="llensLine1"></p>
+        <p class="type-line" id="llensLine2"></p>
+        <p class="type-line" id="llensLine3"></p>
+      </div>
+      <div class="recruit" id="recruit"><i></i>アルファテストユーザー募集中</div>
+    </section>
+
+    <section class="scene features-scene" id="featuresScene">
+      <p class="kicker">ほかにも、研究を支える機能</p>
+      <h2 class="scene-title"><span class="text-line">使えるツールを、ひとつの場所に</span></h2>
+      <div class="browser features-browser">
+        <div class="browser-bar"><i></i><span>PRISM-HU SUPPORT ／ 研究支援</span></div>
+        <div class="browser-view">
+          <div class="screen-content features-screen">
+            <img class="page-shot" src="assets/prism-support-research.png" alt="PRISM-HU SUPPORT研究支援ページ">
+            <img class="page-shot news-shot" id="newsShot" src="assets/medical-ai-news.png" alt="PRISM-HU SUPPORT医療AIニュース一覧">
+            <svg class="page-ring feature-ring-video" viewBox="0 0 300 180" preserveAspectRatio="none" aria-hidden="true">
+              <ellipse id="featureEllipseVideo" cx="150" cy="90" rx="140" ry="80"></ellipse>
+            </svg>
+            <svg class="page-ring feature-ring-slide" viewBox="0 0 300 180" preserveAspectRatio="none" aria-hidden="true">
+              <ellipse id="featureEllipseSlide" cx="150" cy="90" rx="140" ry="80"></ellipse>
+            </svg>
+            <svg class="page-ring feature-ring-links" viewBox="0 0 300 180" preserveAspectRatio="none" aria-hidden="true">
+              <ellipse id="featureEllipseLinks" cx="150" cy="90" rx="140" ry="80"></ellipse>
+            </svg>
+            <svg class="page-ring feature-ring-news" viewBox="0 0 300 180" preserveAspectRatio="none" aria-hidden="true">
+              <ellipse id="featureEllipseNews" cx="150" cy="90" rx="140" ry="80"></ellipse>
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div class="feature-panel">
+        <div class="feature-count" id="featureCount">01</div>
+        <p class="feature-name" id="featureName">講義動画翻訳ツール</p>
+        <p class="feature-copy" id="featureCopy"></p>
+      </div>
+    </section>
+
+    <section class="scene admin-scene" id="adminScene">
+      <div class="admin-card">
+        <div class="gears" aria-hidden="true"><i class="gear">↻</i><i class="gear small">↺</i></div>
+        <p class="eyebrow">OFFICE AUTOMATION</p>
+        <h2><span class="text-line">事務作業の自動化、</span><strong class="text-line">ご相談ください！</strong></h2>
+      </div>
+    </section>
+
+    <section class="scene final-scene" id="finalScene">
+      <div class="final-logo"><img src="assets/prism-hu-logo.png" alt="PRISM-HU"></div>
+      <h2><strong class="text-line">PRISM-HU SUPPORT</strong><span class="text-line">研究の「困った」を、</span><span class="text-line">技術で軽く。</span></h2>
+      <div class="final-qr"><img src="assets/qr-prism-top.svg" alt="PRISM-HUウェブサイトへのQRコード"></div>
+      <p class="final-guide"><span class="text-line">PRISM-HUウェブサイトの</span><strong class="text-line">「PRISM SUPPORT」から</strong><span class="text-line">アクセスできます</span></p>
+      <p class="bookmark-note">ぜひブックマークして、ご活用ください！</p>
+      <p class="final-url">prism-hu.med.hokudai.ac.jp</p>
+      <p class="network-note">SUPPORTサイトは学内ネットワーク限定です</p>
+    </section>
+
+    <aside class="brand-chip" id="brandChip" aria-hidden="true">
+      <img src="assets/prism-hu-logo.png" alt="">
+      <span>研究支援ポータル</span>
+    </aside>
+
+    <aside class="mini-qr" id="miniQr" aria-hidden="true">
+      <img src="assets/qr-prism-top.svg" alt="">
+      <span>PRISM-HU WEB</span>
+    </aside>
+
+    <output class="preview-note" id="previewNote"></output>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const DURATION = 35;
+      const params = new URLSearchParams(location.search);
+      const previewValue = params.get("t");
+      const previewTime = previewValue === null ? null : Math.max(0, Math.min(DURATION - 0.001, Number(previewValue) || 0));
+      const once = params.get("once") === "1";
+      const stage = document.getElementById("stage");
+      const $ = (id) => document.getElementById(id);
+      const BASE_WIDTH = 1080;
+      const BASE_HEIGHT = 1920;
+
+      const fitStage = () => {
+        const scale = Math.min(window.innerWidth / BASE_WIDTH, window.innerHeight / BASE_HEIGHT);
+        stage.style.transform = `translate(-50%, -50%) scale(${scale})`;
+      };
+
+      fitStage();
+      window.addEventListener("resize", fitStage, { passive: true });
+
+      const intro = $("intro");
+      const introLine = $("introLine");
+      const navScene = $("navScene");
+      const supportScene = $("supportScene");
+      const featuresScene = $("featuresScene");
+      const adminScene = $("adminScene");
+      const finalScene = $("finalScene");
+      const brandChip = $("brandChip");
+      const miniQr = $("miniQr");
+      const navScreen = $("navScreen");
+      const navEllipse = $("navEllipse");
+      const navCursor = $("navCursor");
+      const clickWave = $("clickWave");
+      const supportScreen = $("supportScreen");
+      const llensEllipse = $("llensEllipse");
+      const recruit = $("recruit");
+      const previewNote = $("previewNote");
+      const featureEllipses = [$("featureEllipseVideo"), $("featureEllipseSlide"), $("featureEllipseLinks"), $("featureEllipseNews")];
+      const featureName = $("featureName");
+      const featureCopy = $("featureCopy");
+      const featureCount = $("featureCount");
+      const newsShot = $("newsShot");
+
+      const llensLines = [
+        { el: $("llensLine1"), text: "院内で完結するローカルLLM", start: 10.15, end: 11.55 },
+        { el: $("llensLine2"), text: "日常の診療業務を、もっと軽やかに", start: 11.75, end: 13.35 },
+        { el: $("llensLine3"), text: "データ活用から論文執筆までサポート", start: 13.55, end: 15.35 }
+      ];
+
+      const features = [
+        { start: 20, end: 22, name: "講義動画翻訳ツール", copy: "日本語の講義動画を、英語版へ", count: "01" },
+        { start: 22, end: 24, name: "講義スライド変換ツール", copy: "講義スライドを、別言語版へ", count: "02" },
+        { start: 24, end: 26, name: "論文・科研費リンク集", copy: "論文投稿・科研費申請の情報源をひとまとめ", count: "03" },
+        { start: 26, end: 28, name: "医療AIニュース", copy: "役に立つ医療AIニュースを\nほぼ毎日更新中！", count: "04" }
+      ];
+
+      const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
+      const ease = (value) => {
+        const x = clamp(value);
+        return 1 - Math.pow(1 - x, 3);
+      };
+      const mix = (a, b, p) => a + (b - a) * p;
+      const fadeWindow = (time, start, end, fadeIn = .35, fadeOut = .35) => {
+        const enter = clamp((time - start) / fadeIn);
+        const exit = clamp((end - time) / fadeOut);
+        return Math.min(enter, exit);
+      };
+      const applyScene = (element, alpha, lift = 0) => {
+        element.style.opacity = alpha.toFixed(3);
+        element.style.transform = `translateY(${lift * (1 - alpha)}px)`;
+        element.style.visibility = alpha > .002 ? "visible" : "hidden";
+      };
+      const drawEllipse = (element, amount, visible = true) => {
+        const p = visible ? clamp(amount) : 0;
+        element.style.strokeDashoffset = String(900 * (1 - p));
+        element.style.opacity = p > 0 ? "1" : "0";
+      };
+      const typeText = (element, text, amount) => {
+        const p = clamp(amount);
+        const count = Math.floor(text.length * p);
+        element.textContent = text.slice(0, count);
+        element.classList.toggle("typing", p > 0 && p < 1);
+      };
+
+      let startAt = performance.now();
+
+      function render(time) {
+        const introAlpha = fadeWindow(time, 0, 3.35, .18, .42);
+        const navAlpha = fadeWindow(time, 2.85, 8.5, .45, .5);
+        const supportAlpha = fadeWindow(time, 8.0, 20.35, .48, .5);
+        const featuresAlpha = fadeWindow(time, 19.82, 28.45, .45, .48);
+        const adminAlpha = fadeWindow(time, 27.95, 30.48, .42, .42);
+        const finalAlpha = fadeWindow(time, 30.0, 35, .45, .3);
+
+        applyScene(intro, introAlpha);
+        applyScene(navScene, navAlpha, 12);
+        applyScene(supportScene, supportAlpha, 10);
+        applyScene(featuresScene, featuresAlpha, 10);
+        applyScene(adminScene, adminAlpha, 10);
+        applyScene(finalScene, finalAlpha, 8);
+
+        const lineP = ease(clamp((time - .55) / 1.4));
+        introLine.style.width = `${mix(0, 88, lineP)}%`;
+
+        const chromeAlpha = clamp(Math.max(navAlpha, supportAlpha, featuresAlpha, adminAlpha) * 1.2);
+        brandChip.style.opacity = chromeAlpha.toFixed(3);
+        brandChip.style.transform = `translateY(${mix(-12, 0, chromeAlpha)}px)`;
+        brandChip.style.visibility = chromeAlpha > .01 ? "visible" : "hidden";
+
+        const miniEnter = ease(clamp((time - 1.2) / .65));
+        const miniExit = clamp((30.45 - time) / .5);
+        const miniAlpha = Math.min(miniEnter, miniExit);
+        miniQr.style.opacity = miniAlpha.toFixed(3);
+        miniQr.style.transform = `translateY(${mix(12, 0, miniEnter)}px) scale(${mix(.96, 1, miniEnter)})`;
+        miniQr.style.visibility = miniAlpha > .01 ? "visible" : "hidden";
+
+        const navZoom = ease(clamp((time - 5.45) / 1.75));
+        navScreen.style.transformOrigin = "87% 6%";
+        navScreen.style.transform = `scale(${mix(1, 2.42, navZoom)})`;
+        drawEllipse(navEllipse, ease(clamp((time - 4.05) / .8)), time < 7.9);
+
+        const cursorP = ease(clamp((time - 4.62) / .85));
+        navCursor.style.opacity = String(clamp((time - 4.55) / .3) * clamp((7.5 - time) / .35));
+        navCursor.style.transform = `translate(${mix(22, -4, cursorP)}px, ${mix(36, -8, cursorP)}px) rotate(-15deg)`;
+
+        const waveP = clamp((time - 6.25) / .65);
+        clickWave.style.opacity = String(waveP > 0 && waveP < 1 ? 1 - waveP : 0);
+        clickWave.style.transform = `scale(${mix(.35, 1.75, ease(waveP))})`;
+
+        const supportZoom = ease(clamp((time - 9.0) / 1.35));
+        supportScreen.style.transformOrigin = "75% 60%";
+        supportScreen.style.transform = `scale(${mix(1, 1.18, supportZoom)})`;
+        drawEllipse(llensEllipse, ease(clamp((time - 8.75) / .95)), time < 17.55);
+
+        llensLines.forEach(({ el, text, start, end }) => typeText(el, text, (time - start) / (end - start)));
+
+        const recruitP = ease(clamp((time - 16.15) / .62));
+        const recruitOut = clamp((20.05 - time) / .35);
+        recruit.style.opacity = String(Math.min(recruitP, recruitOut));
+        recruit.style.transform = `translateY(${mix(28, 0, recruitP)}px) scale(${mix(.92, 1, recruitP)})`;
+
+        let featureIndex = 0;
+        if (time >= 26) featureIndex = 3;
+        else if (time >= 24) featureIndex = 2;
+        else if (time >= 22) featureIndex = 1;
+        const feature = features[featureIndex];
+        const localP = clamp((time - feature.start) / (feature.end - feature.start));
+        const showingNews = featureIndex === 3;
+        featureName.textContent = feature.name;
+        featureCount.textContent = feature.count;
+        featureCopy.classList.toggle("long", feature.copy.length >= 20);
+        featureCopy.classList.toggle("news-copy", showingNews);
+        newsShot.style.opacity = String(showingNews ? ease(clamp(localP / .16)) : 0);
+        typeText(featureCopy, feature.copy, clamp((localP - .1) / .32));
+        featureEllipses.forEach((ellipse, index) => {
+          const active = index === featureIndex && time >= 19.9 && time < 28.1;
+          drawEllipse(ellipse, active ? ease(clamp(localP / .34)) : 0, active);
+        });
+
+        const gearSpin = (time - 28) * 42;
+        const gears = adminScene.querySelectorAll(".gear");
+        if (gears[0]) gears[0].style.transform = `rotate(${gearSpin}deg)`;
+        if (gears[1]) gears[1].style.transform = `translateY(16px) rotate(${-gearSpin * .8 + 18}deg)`;
+
+        if (previewTime !== null) {
+          document.body.classList.add("preview");
+          previewNote.textContent = `preview t=${time.toFixed(2)}s / ${DURATION}s`;
+        }
+      }
+
+      function tick(now) {
+        let time;
+        if (previewTime !== null) {
+          time = previewTime;
+        } else if (once) {
+          time = Math.min(DURATION - .001, (now - startAt) / 1000);
+        } else {
+          time = ((now - startAt) / 1000) % DURATION;
+        }
+        render(time);
+        if (previewTime === null && !(once && time >= DURATION - .01)) requestAnimationFrame(tick);
+      }
+
+      render(previewTime ?? 0);
+      if (previewTime === null) requestAnimationFrame(tick);
+
+      stage.addEventListener("click", () => {
+        if (previewTime === null) startAt = performance.now();
+      });
+    })();
+  </script>
+</body>
+</html>

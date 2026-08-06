@@ -28,6 +28,11 @@
     object-fit: contain; opacity: 0; transition: opacity 1s;
   }
   #slides img.show { opacity: 1; }
+  #slides iframe {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    border: 0; opacity: 0; transition: opacity 1s;
+  }
+  #slides iframe.show { opacity: 1; }
 </style>
 </head>
 <body>
@@ -35,7 +40,7 @@
   <iframe id="notice" class="layer" title="掲示"></iframe>
 <script>
 (function () {
-  var SLIDE_MS = 20000;                  // 1枚あたりの表示時間
+  var DEFAULT_MS = 20000;                // 1枚あたりの表示時間
   var POLL_MS = 120000;                  // 表示モードの問い合わせ間隔
   var RELOAD_MS = 24 * 60 * 60 * 1000;   // 通常表示中の定期リロード間隔
   var MAX_SLIDES = 30;                   // slides/001.jpg〜030.jpg まで探す（USB運用の命名規則に合わせた上限）
@@ -44,47 +49,155 @@
   var slidesEl = document.getElementById('slides');
   var noticeEl = document.getElementById('notice');
 
-  // ポスターの一覧はコードに持たず、slides/ に実在するものを起動時に探して使う。
-  // 事務室が画像を置く・消すだけで枚数を変えられるようにするため。欠番があっても詰めずに動く
-  // （002 を消せば 001, 003, 004... の順で回る。番号の振り直しは不要）。
-  function findSlides(done) {
+  // 画像は従来どおり slides/ に実在するものを起動時に探す。
+  // 事務室が画像を置く・消すだけで枚数を変えられるようにするため。欠番があってもよい。
+  function findImages(done) {
     var found = [];
     var remaining = MAX_SLIDES;
     function finish() {
       if (--remaining > 0) return;
-      found.sort(function (a, b) { return a.n - b.n; });
-      done(found.map(function (s) { return s.src; }));
+      done(found);
     }
     for (var i = 1; i <= MAX_SLIDES; i++) {
       (function (n) {
-        var src = 'slides/' + ('00' + n).slice(-3) + '.jpg';
+        var slot = ('00' + n).slice(-3);
+        var src = 'slides/' + slot + '.jpg';
         var probe = new Image();
-        probe.onload = function () { found.push({ n: n, src: src }); finish(); };
+        probe.onload = function () {
+          found.push({ slot: slot, type: 'image', src: src, ms: DEFAULT_MS });
+          finish();
+        };
         probe.onerror = finish;
         probe.src = src;
       })(i);
     }
   }
 
-  function startSlideshow(sources) {
-    if (!sources.length) return;  // 1枚も無ければ黒画面のまま。掲示への切替は動き続ける
-    var imgs = sources.map(function (src) {
-      var img = document.createElement('img');
-      img.src = src;
-      slidesEl.appendChild(img);
-      return img;
-    });
-    var idx = 0;
-    imgs[0].classList.add('show');
-    if (imgs.length === 1) return;  // 1枚だけなら切り替えない
-    setInterval(function () {
-      imgs[idx].classList.remove('show');
-      idx = (idx + 1) % imgs.length;
-      imgs[idx].classList.add('show');
-    }, SLIDE_MS);
+  // HTML 枠は playlist.json で宣言する。このサイトは存在しないパスにも 200 で
+  // 代替ページを返すため、画像のように「置いてあるか探す」方式が使えない。
+  // 取得できない・JSON でない・形式が違う場合は空扱いにし、画像だけで動かす。
+  var SLIDE_MARKER = '<!-- signage-slide -->';
+
+  // 取得できたことは実在の証明にならない（代替ページも 200 で返る）ので、
+  // 目印を含むものだけを採用する。パスを間違えたときに無関係なページが
+  // 35秒表示され続けるのを防ぐ。
+  function verifyHtml(entry, done) {
+    fetch(entry.src, { cache: 'no-store' })
+      .then(function (r) { return r.text(); })
+      .then(function (t) { done(t.indexOf(SLIDE_MARKER) >= 0 ? entry : null); })
+      .catch(function () { done(null); });
   }
 
-  findSlides(startSlideshow);
+  function fetchExtras(done) {
+    fetch('slides/playlist.json', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var list = ((j && j.slides) || []).filter(function (s) {
+          return s && typeof s.slot === 'string' && typeof s.path === 'string';
+        }).map(function (s) {
+          var sec = (typeof s.seconds === 'number' && s.seconds > 0) ? s.seconds : 0;
+          return {
+            slot: s.slot, type: 'html', src: s.path,
+            ms: sec ? sec * 1000 : DEFAULT_MS
+          };
+        });
+        if (!list.length) return done([]);
+        var checked = [];
+        var remaining = list.length;
+        list.forEach(function (entry) {
+          verifyHtml(entry, function (ok) {
+            if (ok) checked.push(ok);
+            if (--remaining === 0) done(checked);
+          });
+        });
+      })
+      .catch(function () { done([]); });
+  }
+
+  function buildEntries(done) {
+    findImages(function (images) {
+      fetchExtras(function (extras) {
+        var entries = images.concat(extras).sort(function (a, b) {
+          return a.slot < b.slot ? -1 : (a.slot > b.slot ? 1 : 0);
+        });
+        entries.forEach(function (e) {
+          var el;
+          if (e.type === 'image') {
+            el = document.createElement('img');
+            el.src = e.src;
+          } else {
+            el = document.createElement('iframe');
+            el.title = 'スライド';
+          }
+          el.setAttribute('data-slot', e.slot);
+          slidesEl.appendChild(el);
+          e.el = el;
+        });
+        done(entries);
+      });
+    });
+  }
+
+  var entries = [];
+  var idx = 0;
+  var timer = null;
+
+  // HTML 枠は表示するときだけ読み込む。裏でアニメーションが回り続けて
+  // CPU を使い続けるのを避けるため（24時間稼働のため）。
+  function unloadFrame(entry) {
+    if (entry.type === 'html') entry.el.removeAttribute('src');
+  }
+
+  function showEntry(i) {
+    var cur = entries[i];
+    if (!cur) return;
+    entries.forEach(function (e, n) {
+      if (n === i) return;
+      e.el.classList.remove('show');
+      // フェードアウトが終わってから読み込みを解除する（消える瞬間の空白を避ける）
+      if (e.type === 'html') {
+        setTimeout(function () {
+          if (!e.el.classList.contains('show')) unloadFrame(e);
+        }, 1000);
+      }
+    });
+    var only = entries.length === 1;
+    if (cur.type === 'html') {
+      // 枠が1つだけなら、ページ自身のループに任せて読み込み直さない
+      // （読み込み直すとフェードを経ずに一瞬空白が見えるため）
+      if (!(only && cur.el.getAttribute('src'))) {
+        cur.el.removeAttribute('src');
+        cur.el.src = cur.src + (only ? '' : (cur.src.indexOf('?') < 0 ? '?' : '&') + 'once=1');
+      }
+    }
+    cur.el.classList.add('show');
+    idx = i;
+    if (!only) {
+      timer = setTimeout(function () { showEntry((i + 1) % entries.length); }, cur.ms);
+    }
+  }
+
+  function startPlayback() {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    if (entries.length) showEntry(0);
+  }
+
+  function stopPlayback() {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    entries.forEach(function (e) {
+      e.el.classList.remove('show');
+      unloadFrame(e);
+    });
+  }
+
+  buildEntries(function (list) {
+    entries = list;
+    // 起動直後に掲示モードの応答が先に返っていることがあるため、
+    // 通常表示のときだけ再生を始める（掲示中に裏で回り続けるのを防ぐ）
+    if (mode === 'normal') startPlayback();
+  });
 
   var mode = 'normal';
   var overrideUrl = null;
@@ -104,7 +217,9 @@
       noticeEl.classList.remove('active');
       noticeEl.removeAttribute('src');
       slidesEl.classList.add('active');
+      startPlayback();   // 掲示から戻ったら先頭の枠から流し直す
     } else {
+      stopPlayback();    // 裏でスライドの iframe が回り続けないようにする
       noticeEl.src = noticeSrc();
       slidesEl.classList.remove('active');
       noticeEl.classList.add('active');
