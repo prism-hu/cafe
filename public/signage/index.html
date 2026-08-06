@@ -8,7 +8,8 @@
   ============================================================
   サイエンスカフェ サイネージシェル（ミニPC キオスク表示用）
   - 通常時: slides/ に置かれた画像（001.jpg〜030.jpg のうち実在するもの）をオートプレイ。
-    枚数はコードに書かず起動時に探すので、画像を足す・消すだけで変えられる（欠番があってもよい）
+    枚数はコードに書かず起動時に探すので、画像を足す・消すだけで変えられる（欠番があってもよい）。
+    slides/playlist.json で宣言した HTML 枠（アニメーション等）もこの巡回に加わる
   - 貸切時: door-notice.html を全画面 iframe 表示
   - オープン開催時: event-notice.html を全画面 iframe 表示
   - 臨時URL指定時: 管理シート B3 に貼られた URL を全画面 iframe 表示（埋め込み拒否のサイトは黒画面になる）
@@ -46,6 +47,16 @@
   var MAX_SLIDES = 30;                   // slides/001.jpg〜030.jpg まで探す（USB運用の命名規則に合わせた上限）
   var API_URL = new URLSearchParams(location.search).get('api') || '';
 
+  // 応答が返らないまま止まる（半開き接続・キャプティブポータル等）と再生列が
+  // 組み上がらず黒画面が続くため、必ず時間で打ち切る。
+  var FETCH_TIMEOUT_MS = 10000;
+
+  // 二重に呼ばれないようにする（タイムアウトと応答が競合するため）
+  function once(fn) {
+    var called = false;
+    return function (v) { if (called) return; called = true; fn(v); };
+  }
+
   var slidesEl = document.getElementById('slides');
   var noticeEl = document.getElementById('notice');
 
@@ -82,13 +93,17 @@
   // 目印を含むものだけを採用する。パスを間違えたときに無関係なページが
   // 35秒表示され続けるのを防ぐ。
   function verifyHtml(entry, done) {
+    var finish = once(done);
+    setTimeout(function () { finish(null); }, FETCH_TIMEOUT_MS);
     fetch(entry.src, { cache: 'no-store' })
       .then(function (r) { return r.text(); })
-      .then(function (t) { done(t.indexOf(SLIDE_MARKER) >= 0 ? entry : null); })
-      .catch(function () { done(null); });
+      .then(function (t) { finish(t.indexOf(SLIDE_MARKER) >= 0 ? entry : null); })
+      .catch(function () { finish(null); });
   }
 
   function fetchExtras(done) {
+    var finish = once(done);
+    setTimeout(function () { finish([]); }, FETCH_TIMEOUT_MS);
     fetch('slides/playlist.json', { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (j) {
@@ -101,17 +116,17 @@
             ms: sec ? sec * 1000 : DEFAULT_MS
           };
         });
-        if (!list.length) return done([]);
+        if (!list.length) return finish([]);
         var checked = [];
         var remaining = list.length;
         list.forEach(function (entry) {
           verifyHtml(entry, function (ok) {
             if (ok) checked.push(ok);
-            if (--remaining === 0) done(checked);
+            if (--remaining === 0) finish(checked);
           });
         });
       })
-      .catch(function () { done([]); });
+      .catch(function () { finish([]); });
   }
 
   function buildEntries(done) {
@@ -139,7 +154,6 @@
   }
 
   var entries = [];
-  var idx = 0;
   var timer = null;
 
   // HTML 枠は表示するときだけ読み込む。裏でアニメーションが回り続けて
@@ -148,9 +162,28 @@
     if (entry.type === 'html') entry.el.removeAttribute('src');
   }
 
-  function showEntry(i) {
+  function showEntry(i, skipped) {
     var cur = entries[i];
     if (!cur) return;
+    skipped = skipped || 0;
+    if (skipped >= entries.length) {
+      // すべての枠が読めなかった。詰めて回し続けず、間隔を置いて試し直す
+      timer = setTimeout(function () { showEntry(i, 0); }, DEFAULT_MS);
+      return;
+    }
+    if (cur.type === 'html') {
+      // ネット断のとき iframe に Chrome の障害画面が全画面で出るのを避ける
+      verifyHtml(cur, function (ok) {
+        if (!ok) { showEntry((i + 1) % entries.length, skipped + 1); return; }
+        renderEntry(i);
+      });
+      return;
+    }
+    renderEntry(i);
+  }
+
+  function renderEntry(i) {
+    var cur = entries[i];
     entries.forEach(function (e, n) {
       if (n === i) return;
       e.el.classList.remove('show');
@@ -171,7 +204,6 @@
       }
     }
     cur.el.classList.add('show');
-    idx = i;
     if (!only) {
       timer = setTimeout(function () { showEntry((i + 1) % entries.length); }, cur.ms);
     }
