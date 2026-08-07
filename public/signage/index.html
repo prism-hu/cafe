@@ -174,6 +174,9 @@
     if (cur.type === 'html') {
       // ネット断のとき iframe に Chrome の障害画面が全画面で出るのを避ける
       verifyHtml(cur, function (ok) {
+        // 待っている間に掲示へ切り替わっていたら、何もせず捨てる
+        // （取り残されたコールバックが裏で iframe を読み込み、タイマーを張るのを防ぐ）
+        if (mode !== 'normal') return;
         if (!ok) { showEntry((i + 1) % entries.length, skipped + 1); return; }
         renderEntry(i);
       });
@@ -183,6 +186,7 @@
   }
 
   function renderEntry(i) {
+    if (mode !== 'normal') return;
     var cur = entries[i];
     entries.forEach(function (e, n) {
       if (n === i) return;
