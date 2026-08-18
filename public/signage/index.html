@@ -17,8 +17,10 @@
   - 通常時: slides/ に置かれた画像（001.jpg〜030.jpg のうち実在するもの）をオートプレイ。
     枚数はコードに書かず起動時に探すので、画像を足す・消すだけで変えられる（欠番があってもよい）。
     slides/playlist.json で宣言した HTML 枠（アニメーション等）もこの巡回に加わる
-  - 上部140pxは本日の予定タイムラインヘッダー（常設）。スライドの切替に同期して
-    予定を1件ずつ拡大表示する。デザインは design_handoff_signage のモックが正
+  - 時間進行は period（20秒）単位のマスタータイマー1本。各スライドは N period 表示され、
+    切替は period の拍でのみ起きる（playlist.json の period フィールドで宣言）
+  - 上部140pxは本日の予定タイムラインヘッダー（常設）。拡大表示は毎 period 次の予定へ
+    巡回する（長い HTML 枠の間も止まらない）。デザインは design_handoff_signage のモックが正
   - 動作確認用パラメータ: ?demo=HH:MM で現在時刻を固定、?date=YYYY-MM-DD で対象日を切り替え。
     クリック（タップ）で次の枠へ強制送りできる
   - 貸切時: door-notice.html を全画面 iframe 表示
@@ -184,7 +186,9 @@
   <iframe id="notice" class="layer" title="掲示"></iframe>
 <script>
 (function () {
-  var DEFAULT_MS = 20000;                // 1枚あたりの表示時間
+  // 1 period = 表示時間の基本単位。マスタータイマーがこの間隔で刻み、
+  // スライドの切替（各枠は N period 表示）とヘッダーの拡大表示の巡回が同じ拍で進む
+  var PERIOD_MS = 20000;
   var POLL_MS = 120000;                  // 表示モードの問い合わせ間隔
   var RELOAD_MS = 24 * 60 * 60 * 1000;   // 通常表示中の定期リロード間隔
   var MAX_SLIDES = 30;                   // slides/001.jpg〜030.jpg まで探す（USB運用の命名規則に合わせた上限）
@@ -220,7 +224,7 @@
         var src = 'slides/' + slot + '.jpg';
         var probe = new Image();
         probe.onload = function () {
-          found.push({ slot: slot, type: 'image', src: src, ms: DEFAULT_MS });
+          found.push({ slot: slot, type: 'image', src: src, periods: 1 });
           finish();
         };
         probe.onerror = finish;
@@ -259,11 +263,12 @@
         var list = ((j && j.slides) || []).filter(function (s) {
           return s && typeof s.slot === 'string' && typeof s.path === 'string';
         }).map(function (s) {
-          var sec = (typeof s.seconds === 'number' && s.seconds > 0) ? s.seconds : 0;
-          return {
-            slot: s.slot, type: 'html', src: s.path,
-            ms: sec ? sec * 1000 : DEFAULT_MS
-          };
+          // 表示時間は period 単位で宣言する。旧形式の seconds は切り上げで読み替える
+          var per = (typeof s.period === 'number' && s.period >= 1)
+            ? Math.round(s.period)
+            : ((typeof s.seconds === 'number' && s.seconds > 0)
+              ? Math.max(1, Math.ceil(s.seconds * 1000 / PERIOD_MS)) : 1);
+          return { slot: s.slot, type: 'html', src: s.path, periods: per };
         });
         if (!list.length) return finish({ list: [], cover: cover });
         var checked = [];
@@ -304,11 +309,11 @@
   }
 
   var entries = [];
-  var timer = null;
-  // 再生チェーンの世代番号。チェーンの張り直し（クリック送り・掲示からの復帰）のたびに
-  // 進め、verifyHtml 待ちで取り残された旧チェーンのコールバックを無効化する。
-  // これが無いと、HTML枠の verify 待ち（timer=null の窓）に追加クリックが入ったとき
-  // 2本のタイマーループが恒久的に並走する
+  var current = -1;       // 表示中の枠 index。-1 = 未表示（次の period で先頭から試す）
+  var periodsLeft = 0;    // 表示中の枠の残り period 数（マスタータイマーが消費する）
+  var advancing = false;  // 切替チェーン（verifyHtml 待ち含む）実行中。tick を重ねないため
+  // 切替チェーンの世代番号。チェーンの張り直し（クリック送り・掲示からの復帰）のたびに
+  // 進め、verifyHtml 待ちで取り残された旧チェーンのコールバックを無効化する
   var playSeq = 0;
 
   // HTML 枠は表示するときだけ読み込む。裏でアニメーションが回り続けて
@@ -320,19 +325,21 @@
   function showEntry(i, skipped, seq) {
     if (seq === undefined) seq = playSeq;   // チェーンの起点でだけ世代を取り込む
     if (seq !== playSeq) return;
+    advancing = true;
     var cur = entries[i];
-    if (!cur) return;
+    if (!cur) { advancing = false; return; }
     skipped = skipped || 0;
     if (skipped >= entries.length) {
-      // すべての枠が読めなかった。詰めて回し続けず、間隔を置いて試し直す
-      timer = setTimeout(function () { showEntry(i, 0, seq); }, DEFAULT_MS);
+      // すべての枠が読めなかった。詰めて回し続けず、次の period で先頭から試し直す
+      current = -1;
+      advancing = false;
       return;
     }
     if (cur.type === 'html') {
       // ネット断のとき iframe に Chrome の障害画面が全画面で出るのを避ける
       verifyHtml(cur, function (ok) {
         // 待っている間に掲示へ切り替わった／チェーンが張り直されたら、何もせず捨てる
-        // （取り残されたコールバックが裏で iframe を読み込み、タイマーを張るのを防ぐ）
+        // （advancing は新しいチェーン・stopPlayback 側が管理している）
         if (mode !== 'normal' || seq !== playSeq) return;
         if (!ok) { showEntry((i + 1) % entries.length, skipped + 1, seq); return; }
         renderEntry(i, seq);
@@ -344,9 +351,6 @@
 
   function renderEntry(i, seq) {
     if (mode !== 'normal' || seq !== playSeq) return;
-    // スライドの切替に同期して、ヘッダーの拡大表示も次の予定へ進める（ハンドオフの中核仕様）
-    phase++;
-    renderHeader();
     var cur = entries[i];
     entries.forEach(function (e, n) {
       if (n === i) return;
@@ -368,22 +372,24 @@
       }
     }
     cur.el.classList.add('show');
-    if (!only) {
-      timer = setTimeout(function () { showEntry((i + 1) % entries.length, 0, seq); }, cur.ms);
-    }
+    current = i;
+    periodsLeft = cur.periods;
+    advancing = false;
   }
 
   function startPlayback() {
     playSeq++;
-    if (timer) clearTimeout(timer);
-    timer = null;
+    advancing = false;
+    current = -1;
+    periodsLeft = 0;
     if (entries.length) showEntry(0);
   }
 
   function stopPlayback() {
     playSeq++;
-    if (timer) clearTimeout(timer);
-    timer = null;
+    advancing = false;
+    current = -1;
+    periodsLeft = 0;
     entries.forEach(function (e) {
       e.el.classList.remove('show');
       unloadFrame(e);
@@ -408,7 +414,7 @@
   // todayData を受信した日。日付が変わったら（次の poll まで）前日の予定を
   // 「今日の予定」として出さないためのガード
   var todayDataDay = null;
-  var phase = 0;                        // スライド切替に同期して進む拡大表示カウンター
+  var phase = 0;   // 拡大表示の巡回カウンター。period マスタータイマー（とクリック送り）が進める
   var DAY_START = 450, DAY_END = 1200;  // タイムラインの表示時間帯 7:30–20:00（分）
   // 貸切・部分利用の色はハンドオフの Design Tokens。open（イベント）はハンドオフに
   // 無い第3の種別のため、イベント掲示（event-notice）系統の紫を割り当てた
@@ -433,15 +439,14 @@
   }
 
   // クリック（タップ）で次の枠へ強制送り。動作確認・早送り用。
+  // ヘッダーの拡大表示も一緒に送る（period の巡回を目視で早回しできるように）。
   // 表示中の HTML 枠（iframe）内のクリックは親に届かないため、画像枠でのみ効く
   document.addEventListener('click', function () {
     if (mode !== 'normal' || entries.length < 2) return;
     playSeq++;   // verify 待ち中の旧チェーンを無効化してから張り直す
-    if (timer) clearTimeout(timer);
-    timer = null;
-    var i = -1;
-    entries.forEach(function (e, n) { if (e.el.classList.contains('show')) i = n; });
-    showEntry((i + 1) % entries.length);
+    phase++;
+    renderHeader();
+    showEntry((current < 0 ? 0 : (current + 1) % entries.length));
   });
 
   // 1080×1920 のキャンバスをウィンドウに収まる倍率で縮小し中央に置く（実機では scale=1）
@@ -640,16 +645,20 @@
     if (m !== lastMinute) { lastMinute = m; renderHeader(); }
   }, 1000);
 
-  // 拡大表示の巡回はスライド切替に同期して進む（renderEntry 内の phase++）。
-  // スライドが1枚以下・掲示中はフェードが起きないため、こちらの固定周期で回す
-  var FOCUS_FALLBACK_MS = 15000;
+  // ---- period マスタータイマー（時間進行の唯一の源） ----
+  // 毎 period で: (1) ヘッダーの拡大表示を次へ送り、(2) 表示中スライドの残り period を
+  // 消費して尽きたら次の枠へ。スライド切替とヘッダー巡回が同じ拍で起きる
+  // （ハンドオフの「1つのタイマーでフェードと拡大表示を同期」の実装）。
+  // 掲示中・スライド1枚のときも (1) は動き続ける
   setInterval(function () {
-    if (headerEl.classList.contains('visible') &&
-        (mode !== 'normal' || entries.length <= 1)) {
-      phase++;
-      renderHeader();
-    }
-  }, FOCUS_FALLBACK_MS);
+    phase++;
+    renderHeader();
+    if (mode !== 'normal' || !entries.length) return;
+    if (advancing) return;                 // 切替チェーン（verify 待ち）実行中は重ねない
+    if (current < 0) { showEntry(0); return; }   // 起動直後・全枠失敗後の再試行
+    if (entries.length === 1) return;      // 1枠はページ自身のループに任せる
+    if (--periodsLeft <= 0) showEntry((current + 1) % entries.length);
+  }, PERIOD_MS);
 })();
 </script>
 </body>
