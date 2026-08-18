@@ -61,9 +61,10 @@
   #header .room { font-size: 15px; color: #94A3B8; font-weight: 500; }
   #header .date { font-size: 21px; font-weight: 700; }
   #header .clock { font-size: 36px; font-weight: 900; letter-spacing: 1px; line-height: 1; }
-  /* 現在時刻の「:」を1秒周期でゆるく明滅させる（不透明⇔半透明。完全に消すと目立ちすぎる） */
-  #header .clock .colon { animation: colon-blink 1s ease-in-out infinite; }
-  @keyframes colon-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  /* 現在時刻の「:」: フェードさせず、1秒表示 → 1秒半透明のハード切替
+     （完全に消すと目立ちすぎるため半透明どまり） */
+  #header .clock .colon { animation: colon-blink 2s step-end infinite; }
+  @keyframes colon-blink { 0% { opacity: 1; } 50% { opacity: 0.3; } }
   #header .main {
     flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0;
   }
