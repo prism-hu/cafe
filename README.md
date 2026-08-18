@@ -13,13 +13,14 @@
 ```
 public/
 ├── index.html                  # 案内LP（QRの飛び先。正本は WordPress 用断片、これはそのスタンドアロン版）
+├── frames/                     # サイネージの HTML 枠（独立ページ。iframe で表示される）
+│   └── support-promo/          # PRISM SUPPORT 紹介アニメーション
 └── signage/
     ├── index.html              # サイネージシェル（ミニPC キオスクで24時間表示する本体）
     ├── door-notice.html        # 貸切中のドア掲示（全画面）
     ├── event-notice.html       # オープン開催中の掲示（全画面）
     ├── qr-cafe.png             # ヘッダー内 QR（→ cafe.prism-hu.org）
-    ├── slides/                 # ポスター画像 001.jpg〜030.jpg（欠番可）+ playlist.json
-    └── support-promo/          # PRISM SUPPORT 紹介アニメーション（HTML枠の実例）
+    └── slides/                 # ポスター画像 001.jpg〜030.jpg（欠番可）+ playlist.json
 ```
 
 ### 案内LP（`/`）
