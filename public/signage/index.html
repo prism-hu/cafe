@@ -228,16 +228,37 @@
   var NAME_RE = /^(\d{2})_([a-z0-9-]+)_(cover|contain)_(\d{2})\.(jpe?g|png|html)$/;
 
   // 一覧の取得。返すのは {name, id?} の配列（id は Drive のファイル id、repo 内のときは無し）。
-  // 第一情報源は Drive フォルダを列挙する GAS（SLIDES_API）。取得できなければ repo 内
-  // slides/ に落ちる: 静的ホスティング（CF Pages）はディレクトリ一覧を返せないため、
-  // デプロイ時に CI が機械生成する slides/manifest.json（{"files":[...]}）を読み、
-  // それも読めなければ slides/ の fetch 結果（python http.server のディレクトリ
-  // リスティング HTML）から href を抽出して代用する（ローカル確認用）
+  // 第一情報源は Drive フォルダを列挙する GAS（SLIDES_API)。取得できない・規約名の
+  // ファイルが1つも無いときは repo 内 slides/ に落ちる: 静的ホスティング（CF Pages）は
+  // ディレクトリ一覧を返せないため、デプロイ時に CI が機械生成する slides/manifest.json
+  // （{"files":[...]}）を読み、それも駄目なら slides/ の fetch 結果（python http.server の
+  // ディレクトリリスティング HTML）から href を抽出して代用する（ローカル確認用)
+
+  // タイムアウトは段ごとに持つ。連鎖全体で1つにすると、GAS が「ハングして遅く失敗」
+  // したときに予算を使い切り、CF Pages が健在でも manifest に落ちられなくなる
+  function fetchTimeout(url, opts) {
+    return new Promise(function (resolve, reject) {
+      var t = setTimeout(function () { reject(new Error('タイムアウト')); }, FETCH_TIMEOUT_MS);
+      fetch(url, opts).then(
+        function (r) { clearTimeout(t); resolve(r); },
+        function (e) { clearTimeout(t); reject(e); });
+    });
+  }
+
+  // 「取得は成功したが空・全部規約外」も失敗と同じ扱いで次段に落とすための検査。
+  // フォルダを空にされた・規約外の名前しか無い、で黒画面のまま止まらないように
+  function pickValid(items) {
+    var ok = items.filter(function (it) { return it && typeof it.name === 'string'; });
+    if (!ok.some(function (it) { return NAME_RE.test(it.name); })) {
+      throw new Error('規約名のファイルなし');
+    }
+    return ok;
+  }
+
   function fetchNames(done) {
-    var finish = once(done);
-    setTimeout(function () { finish([]); }, FETCH_TIMEOUT_MS);
+    done = once(done);   // 万一 done 自身が例外を投げても catch 連鎖で二重に走らせない
     function tryListing() {
-      fetch('slides/', { cache: 'no-store' })
+      fetchTimeout('slides/', { cache: 'no-store' })
         .then(function (r) { return r.text(); })
         .then(function (t) {
           var items = [], re = /href="([^"]+)"/g, m;
@@ -245,28 +266,27 @@
             var p = decodeURIComponent(m[1]).split('?')[0].split('/').pop();
             if (p) items.push({ name: p });
           }
-          finish(items);
+          done(pickValid(items));
         })
-        .catch(function () { finish([]); });
+        .catch(function () { done([]); });
     }
     function tryManifest() {
-      fetch('slides/manifest.json', { cache: 'no-store' })
+      fetchTimeout('slides/manifest.json', { cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (j) {
           if (!j || !Array.isArray(j.files)) throw new Error('manifest 形式不正');
-          finish(j.files.filter(function (f) { return typeof f === 'string'; })
-            .map(function (f) { return { name: f }; }));
+          done(pickValid(j.files.map(function (f) { return { name: f }; })));
         })
         .catch(tryListing);
     }
     if (!SLIDES_API) return tryManifest();
-    fetch(SLIDES_API, { redirect: 'follow', cache: 'no-store' })
+    fetchTimeout(SLIDES_API, { redirect: 'follow', cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (j) {
         if (!j || !Array.isArray(j.files)) throw new Error('slides API 形式不正');
-        finish(j.files.filter(function (f) {
-          return f && typeof f.name === 'string' && typeof f.id === 'string';
-        }));
+        done(pickValid(j.files.filter(function (f) {
+          return f && typeof f.id === 'string';
+        })));
       })
       .catch(tryManifest);
   }
@@ -329,6 +349,10 @@
           var el;
           if (e.type === 'image') {
             el = document.createElement('img');
+            // 読めない画像（共有切れ・lh3 障害等）を黒画面として N period 巡回
+            // させないための印。showEntry がこれを見て飛ばす
+            el.onerror = function () { e.broken = true; };
+            el.onload = function () { e.broken = false; };
             el.src = e.src;
           } else {
             el = document.createElement('iframe');
@@ -376,6 +400,14 @@
       // すべての枠が読めなかった。詰めて回し続けず、次の period で先頭から試し直す
       current = -1;
       advancing = false;
+      return;
+    }
+    if (cur.type === 'image' && cur.broken) {
+      // 読み込みに失敗した画像は飛ばす。src を張り直して再挑戦だけさせておき、
+      // 復活したら onload が broken を下ろして次の周から表示に戻る
+      cur.el.removeAttribute('src');   // 同一 URL の再代入では再読込されないことがある
+      cur.el.src = cur.src;
+      showEntry((i + 1) % entries.length, skipped + 1, seq);
       return;
     }
     if (cur.type === 'html') {

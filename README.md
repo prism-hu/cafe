@@ -63,7 +63,8 @@ gas/
   規約にマッチしないファイルは取り込まず console.warn に列挙
 - 一覧の取得: **第一情報源は Google Drive フォルダを列挙する GAS Web アプリ**
   （詳細は「[スライドの Google Drive 管理](#スライドの-google-drive-管理)」）。
-  取得できなければ repo 内 `slides/` に落ちる: デプロイ時に CI が機械生成する
+  取得できない・**規約名のファイルが1つも無い**ときは repo 内 `slides/` に落ちる:
+  デプロイ時に CI が機械生成する
   `slides/manifest.json`（repo では gitignore、人は編集しない）→ それも読めなければ
   python http.server のディレクトリリスティングを解析して代用（ローカル確認用）。
   `?slides=` で上書き可（空にすると repo 内 slides/ だけで動く）

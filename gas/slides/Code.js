@@ -10,6 +10,9 @@ function doGet() {
   var files = [];
   while (it.hasNext()) {
     var f = it.next();
+    // ゴミ箱内のファイルも親フォルダ経由で列挙されることがある。
+    // 「消したはずのスライド」が最長30日返り続けるのを防ぐ
+    if (f.isTrashed()) continue;
     files.push({ name: f.getName(), id: f.getId() });
   }
   return ContentService.createTextOutput(JSON.stringify({ files: files }))
