@@ -43,8 +43,10 @@
     width: 100px; height: 100px; display: block;
     background: #fff; padding: 3px; border-radius: 4px;
   }
-  /* バナー表示中はポスター領域をその下に縮める（掲示 iframe は全画面のまま） */
-  body.with-banner #slides { top: 140px; height: calc(100% - 140px); }
+  /* バナー表示中はポスター領域・掲示 iframe をその下に縮める
+     （臨時URL中は帯を出さないので #notice が縮むのは貸切・イベント掲示のみ） */
+  body.with-banner #slides,
+  body.with-banner #notice { top: 140px; height: calc(100% - 140px); }
   #slides img {
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: contain; opacity: 0; transition: opacity 1s;
@@ -290,7 +292,14 @@
   }
 
   function renderBanner() {
-    if (mode !== 'normal' || todayData === null) {
+    // 掲示中（private/open）も帯は出す。「何時に空くか」を知らせるのが帯の役目のため。
+    // 出さないのは次の3つ:
+    // - 一度も取得できていない（誤って「終日ご利用いただけます」を出さない安全側）
+    // - 臨時URL中（運用者による画面の完全な乗っ取りなので邪魔しない）
+    // - 掲示中なのに当日予定が空（強制貸切フラグ運用時。「終日ご利用いただけます」と矛盾するため）
+    var hide = todayData === null || mode === 'override' ||
+      (mode !== 'normal' && !todayData.length);
+    if (hide) {
       document.body.classList.remove('with-banner');
       bannerEl.classList.remove('visible');
       return;
