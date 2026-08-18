@@ -276,33 +276,47 @@
     return item.start + '–' + item.end + ' ' + KIND_LABEL[item.kind];
   }
 
+  function buildBannerText(n) {
+    var shown = todayData.slice(0, n).map(bannerLine);
+    var rest = todayData.length - n;
+    return '本日 ' + shown.join(' ／ ') + (rest > 0 ? ' ／ ほか' + rest + '件' : '');
+  }
+
   function renderBanner() {
     if (mode !== 'normal' || todayData === null) {
       document.body.classList.remove('with-banner');
       bannerEl.classList.remove('visible');
       return;
     }
-    var text;
-    if (!todayData.length) {
-      text = '本日は終日ご利用いただけます';
-    } else {
-      var shown = todayData.slice(0, BANNER_MAX_ITEMS).map(bannerLine);
-      var rest = todayData.length - BANNER_MAX_ITEMS;
-      text = '本日 ' + shown.join(' ／ ') + (rest > 0 ? ' ／ ほか' + rest + '件' : '');
-    }
-    bannerTextEl.textContent = text;
+    // クラスを先に付けて可視化してから測る（非表示のままだと clientHeight が 0 になるため）
     document.body.classList.add('with-banner');
     bannerEl.classList.add('visible');
+    if (!todayData.length) {
+      bannerTextEl.textContent = '本日は終日ご利用いただけます';
+      return;
+    }
+    // 表示件数 n を min(件数,3) から 1 まで降順に試し、実測して2行(clientHeight)に
+    // 収まる最初の n を採用する。どの n でも収まらなければ n=1（ほか◯件付き）で妥協する
+    var maxN = Math.min(todayData.length, BANNER_MAX_ITEMS);
+    for (var n = maxN; n >= 1; n--) {
+      bannerTextEl.textContent = buildBannerText(n);
+      if (bannerTextEl.scrollHeight <= bannerTextEl.clientHeight) return;
+    }
+    // ここに来るのは n=1 でも収まらない場合。ループ末尾で設定済みの n=1 表示のまま妥協する
   }
 
   // 匿名 API のため表示側でも形を検査する（override の https 再確認と同じ思想）
   function sanitizeToday(list) {
     if (!Array.isArray(list)) return null;
     var HHMM = /^\d{2}:\d{2}$/;
-    return list.filter(function (s) {
+    var filtered = list.filter(function (s) {
       return s && HHMM.test(s.start) && HHMM.test(s.end) &&
         (s.kind === 'private' || s.kind === 'open' || s.kind === 'partial');
-    }).map(function (s) { return { start: s.start, end: s.end, kind: s.kind }; });
+    });
+    // 要素はあったが全部フィルタで落ちた場合、「本当に予定なし」と区別できないため
+    // 前回内容を保持する安全側（null）に倒す。空配列の入力（本当に予定なし）はそのまま返す
+    if (list.length > 0 && filtered.length === 0) return null;
+    return filtered.map(function (s) { return { start: s.start, end: s.end, kind: s.kind }; });
   }
 
   function noticeSrc() {
