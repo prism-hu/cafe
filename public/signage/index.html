@@ -4,49 +4,146 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>サイネージ - サイエンスカフェ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- media="print" + onload で非レンダーブロッキング読み込みにする。
+     ネット断・キャプティブポータル時に起動が CDN 待ちで黒画面のまま止まるのを防ぐ
+     （取得できるまでは代替 sans-serif で描画される） -->
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap"
+      rel="stylesheet" media="print" onload="this.media='all'">
 <!--
   ============================================================
   サイエンスカフェ サイネージシェル（ミニPC キオスク表示用）
   - 通常時: slides/ に置かれた画像（001.jpg〜030.jpg のうち実在するもの）をオートプレイ。
     枚数はコードに書かず起動時に探すので、画像を足す・消すだけで変えられる（欠番があってもよい）。
     slides/playlist.json で宣言した HTML 枠（アニメーション等）もこの巡回に加わる
+  - 上部140pxは本日の予定タイムラインヘッダー（常設）。スライドの切替に同期して
+    予定を1件ずつ拡大表示する。デザインは design_handoff_signage のモックが正
+  - 動作確認用パラメータ: ?demo=HH:MM で現在時刻を固定、?date=YYYY-MM-DD で対象日を切り替え。
+    クリック（タップ）で次の枠へ強制送りできる
   - 貸切時: door-notice.html を全画面 iframe 表示
   - オープン開催時: event-notice.html を全画面 iframe 表示
   - 臨時URL指定時: 管理シート B3 に貼られた URL を全画面 iframe 表示（埋め込み拒否のサイトは黒画面になる）
   - 表示モードは GAS Web アプリ（doGet）を 2 分毎にポーリングして取得。
-    API URL は起動 URL の ?api= で渡す（例: /signage/?api=https://script.google.com/.../exec）
+    既定で本番 GAS（DEFAULT_API）を見る。?api= で上書きできる（ローカルモック等）
   - ネット断・API 障害時は最後の表示を維持（掲示が突然消える事故を防ぐ）
   - 通常表示中に 24 時間経過したらリロードし、ポスター差し替えを取り込む
   ============================================================
 -->
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+  html { width: 100%; height: 100%; overflow: hidden; background: #333; }
+  /* レイアウトは常に実機キャンバス（1080×1920 縦）で組み、ウィンドウには JS の
+     scale で収める。実機（ちょうど 1080×1920）では scale=1 になり等倍表示 */
+  body {
+    position: relative; width: 1080px; height: 1920px;
+    overflow: hidden; background: #000; transform-origin: top left;
+  }
   .layer { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: none; }
   .layer.active { display: block; }
-  /* 上部バナー（本日の占有情報）。高さ固定・常時表示。掲示中と未取得時は出さない */
-  #banner {
+  /* 上部ヘッダー（本日の予定タイムライン）。高さ固定・常時表示。
+     デザイン値（色・寸法・タイポグラフィ）は design_handoff_signage のモックに忠実に合わせる。
+     未取得時・臨時URL中は出さない */
+  #header {
     position: absolute; top: 0; left: 0; right: 0; height: 140px;
-    display: none; align-items: center; gap: 20px; padding: 0 24px;
-    background: #1a3a5c; color: #fff; font-family: sans-serif; z-index: 10;
+    /* 下 padding は上より小さく: 下側はフォーカス行のフレックス中央計算の外にあるため、
+       同じ 12px にすると拡大表示が上に寄って見える（実測で上下の見た目余白が揃う値） */
+    display: none; align-items: stretch; gap: 16px; padding: 12px 24px 6px;
+    background: #101828; color: #F1F5F9;
+    font-family: 'Noto Sans JP', sans-serif;
+    border-bottom: 2px solid #1E293B; z-index: 10;
   }
-  #banner.visible { display: flex; }
-  #banner .text {
-    flex: 1; font-size: 34px; line-height: 1.45;
-    overflow: hidden; max-height: 100px;  /* 最大2行。溢れは JS 側で「ほか◯件」に丸める */
+  #header.visible { display: flex; }
+  #header .left {
+    width: 168px; flex: none; display: flex; flex-direction: column;
+    justify-content: center; gap: 2px;
   }
-  #banner .qrbox {
-    flex: none; display: flex; flex-direction: column; align-items: center; gap: 5px;
+  #header .room { font-size: 15px; color: #94A3B8; font-weight: 500; }
+  #header .date { font-size: 21px; font-weight: 700; }
+  #header .clock { font-size: 36px; font-weight: 900; letter-spacing: 1px; line-height: 1; }
+  /* 現在時刻の「:」を1秒周期でゆるく明滅させる（不透明⇔半透明。完全に消すと目立ちすぎる） */
+  #header .clock .colon { animation: colon-blink 1s ease-in-out infinite; }
+  @keyframes colon-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  #header .main {
+    flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0;
   }
-  #banner .qrbox .caption { font-size: 19px; line-height: 1; letter-spacing: 0.05em; }
-  #banner img.qr {
-    width: 100px; height: 100px; display: block;
+  #header .timeline { position: relative; height: 46px; flex: none; }
+  #header .tick-label {
+    position: absolute; top: 0; transform: translateX(-50%);
+    font-size: 11px; color: #64748B;
+  }
+  /* 時刻ラベルの行ボックスは実測 ~15px。フォーカス時は上に 3px 拡大 + 白枠が外に ~2px
+     出るため、バー本体は 22px 開始にしてラベルと確実に離す */
+  #header .tick-line { position: absolute; top: 17px; bottom: 0; width: 1px; background: #273549; }
+  #header .track {
+    position: absolute; top: 22px; bottom: 0; left: 0; right: 0;
+    background: #172033; border-radius: 6px;
+  }
+  #header .block {
+    position: absolute; top: 22px; bottom: 0; border-radius: 5px; z-index: 2;
+  }
+  #header .block.ended { opacity: 0.3; }
+  /* 拡大表示中の予定: 白枠 + 上下に少し拡大 + グローで浮かせ、
+     下の拡大表示行との対応をキャレット（▼）で指し示す */
+  #header .block.focused {
+    outline: 3px solid #F1F5F9; outline-offset: -1px; z-index: 3;
+    top: 19px; bottom: -3px;
+    box-shadow: 0 0 12px rgba(241, 245, 249, 0.5);
+  }
+  #header .block.focused.ended { opacity: 0.55; }
+  #header .caret {
+    /* フォーカス中ブロックは bottom:-3px まで拡大しているので、その下端（49px）に接続する */
+    position: absolute; top: 49px; margin-left: -8px;
+    width: 0; height: 0; z-index: 6;
+    border-left: 8px solid transparent; border-right: 8px solid transparent;
+    border-top: 9px solid #F1F5F9;
+  }
+  #header .nowline {
+    position: absolute; top: 16px; bottom: -2px; width: 3px;
+    background: #EF4444; border-radius: 2px; z-index: 5;
+  }
+  /* 拡大表示: 時間と状態ピルは2行に跨って縦中央、
+     タイトルは最大2行に折り返し（見切れ対策）。種別バッジはタイトル行頭にインライン */
+  #header .focus {
+    flex: 1; display: flex; align-items: center; gap: 16px; min-width: 0;
+  }
+  #header .f-time { font-size: 28px; font-weight: 900; letter-spacing: 0.5px; flex: none; }
+  #header .f-text {
+    flex: 1; min-width: 0; font-size: 22px; font-weight: 700; line-height: 1.35;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  #header .f-badge {
+    display: inline-block; vertical-align: 2px; margin-right: 10px;
+    font-size: 15px; font-weight: 700; line-height: 1.4; padding: 1px 12px;
+    border-radius: 999px; color: #0B0F1A;
+  }
+  #header .f-live {
+    flex: none; font-size: 15px; font-weight: 700; color: #EF4444;
+    border: 2px solid #EF4444; border-radius: 999px; padding: 2px 12px;
+  }
+  #header .f-done {
+    flex: none; font-size: 15px; font-weight: 700; color: #94A3B8;
+    border: 2px solid #64748B; border-radius: 999px; padding: 2px 12px;
+  }
+  /* 終了済みの予定を拡大表示するときは本文を薄くする（終了済みピルは薄くしない） */
+  #header .focus.ended .f-time,
+  #header .focus.ended .f-text { opacity: 0.55; }
+  #header .f-free { font-size: 26px; font-weight: 900; color: #34D399; }
+  #header .f-free-sub { font-size: 18px; color: #94A3B8; }
+  #header .qrbox {
+    flex: none; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 4px;
+  }
+  #header .qrbox .caption { font-size: 15px; line-height: 1; letter-spacing: 0.05em; color: #94A3B8; }
+  #header img.qr {
+    width: 88px; height: 88px; display: block;
     background: #fff; padding: 3px; border-radius: 4px;
   }
-  /* バナー表示中はポスター領域・掲示 iframe をその下に縮める
-     （臨時URL中は帯を出さないので #notice が縮むのは貸切・イベント掲示のみ） */
-  body.with-banner #slides,
-  body.with-banner #notice { top: 140px; height: calc(100% - 140px); }
+  /* ヘッダー表示中はポスター領域・掲示 iframe をその下に縮める
+     （臨時URL中はヘッダーを出さないので #notice が縮むのは貸切・イベント掲示のみ） */
+  body.with-header #slides,
+  body.with-header #notice { top: 140px; height: calc(100% - 140px); }
   #slides img {
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: contain; opacity: 0; transition: opacity 1s;
@@ -57,11 +154,24 @@
     border: 0; opacity: 0; transition: opacity 1s;
   }
   #slides iframe.show { opacity: 1; }
+  /* cover 指定の枠（playlist.json の "cover" にスロット番号を列挙）:
+     余白（黒帯）を作らず全面に出す。ヘッダー表示中は縦が 1780px に詰まるため、
+     1080×1920 設計のポスターは上下 70px ずつ切れる。切れて困る枠は指定しない */
+  #slides img.cover { object-fit: cover; }
+  body.with-header #slides iframe.cover { top: -70px; height: calc(100% + 140px); }
 </style>
 </head>
 <body>
-  <div id="banner">
-    <div class="text" id="banner-text"></div>
+  <div id="header">
+    <div class="left">
+      <div class="room">サイエンスカフェ</div>
+      <div class="date" id="hd-date"></div>
+      <div class="clock" id="hd-clock"></div>
+    </div>
+    <div class="main">
+      <div class="timeline" id="hd-timeline"></div>
+      <div class="focus" id="hd-focus"></div>
+    </div>
     <div class="qrbox">
       <div class="caption">カレンダーはこちら</div>
       <img class="qr" src="qr-cafe.png" alt="カフェの案内・カレンダー" onerror="this.parentNode.style.display='none'">
@@ -75,7 +185,9 @@
   var POLL_MS = 120000;                  // 表示モードの問い合わせ間隔
   var RELOAD_MS = 24 * 60 * 60 * 1000;   // 通常表示中の定期リロード間隔
   var MAX_SLIDES = 30;                   // slides/001.jpg〜030.jpg まで探す（USB運用の命名規則に合わせた上限）
-  var API_URL = new URLSearchParams(location.search).get('api') || '';
+  // 表示モード API（GAS doGet）。?api= で上書きできる（ローカルモック等）
+  var DEFAULT_API = 'https://script.google.com/macros/s/AKfycbzhhXCd4jsPEfHMG5MhsjfjXsBM4ToHzb-fuNXZKEQlKOI-X_j-s-QdUadsx_wOfPGp/exec';
+  var API_URL = new URLSearchParams(location.search).get('api') || DEFAULT_API;
 
   // 応答が返らないまま止まる（半開き接続・キャプティブポータル等）と再生列が
   // 組み上がらず黒画面が続くため、必ず時間で打ち切る。
@@ -88,8 +200,6 @@
   }
 
   var slidesEl = document.getElementById('slides');
-  var bannerEl = document.getElementById('banner');
-  var bannerTextEl = document.getElementById('banner-text');
   var noticeEl = document.getElementById('notice');
 
   // 画像は従来どおり slides/ に実在するものを起動時に探す。
@@ -134,11 +244,15 @@
   }
 
   function fetchExtras(done) {
-    var finish = once(done);
-    setTimeout(function () { finish([]); }, FETCH_TIMEOUT_MS);
+    var finish = once(function (r) { done(r.list, r.cover); });
+    setTimeout(function () { finish({ list: [], cover: [] }); }, FETCH_TIMEOUT_MS);
     fetch('slides/playlist.json', { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (j) {
+        // cover の書式ミス（非配列など）で slides まで巻き添えにしないよう、型を厳密に見る
+        var cover = (j && Array.isArray(j.cover))
+          ? j.cover.filter(function (s) { return typeof s === 'string'; })
+          : [];
         var list = ((j && j.slides) || []).filter(function (s) {
           return s && typeof s.slot === 'string' && typeof s.path === 'string';
         }).map(function (s) {
@@ -148,22 +262,22 @@
             ms: sec ? sec * 1000 : DEFAULT_MS
           };
         });
-        if (!list.length) return finish([]);
+        if (!list.length) return finish({ list: [], cover: cover });
         var checked = [];
         var remaining = list.length;
         list.forEach(function (entry) {
           verifyHtml(entry, function (ok) {
             if (ok) checked.push(ok);
-            if (--remaining === 0) finish(checked);
+            if (--remaining === 0) finish({ list: checked, cover: cover });
           });
         });
       })
-      .catch(function () { finish([]); });
+      .catch(function () { finish({ list: [], cover: [] }); });
   }
 
   function buildEntries(done) {
     findImages(function (images) {
-      fetchExtras(function (extras) {
+      fetchExtras(function (extras, coverSlots) {
         var entries = images.concat(extras).sort(function (a, b) {
           return a.slot < b.slot ? -1 : (a.slot > b.slot ? 1 : 0);
         });
@@ -177,6 +291,7 @@
             el.title = 'スライド';
           }
           el.setAttribute('data-slot', e.slot);
+          if (coverSlots.indexOf(e.slot) >= 0) el.classList.add('cover');
           slidesEl.appendChild(el);
           e.el = el;
         });
@@ -187,6 +302,11 @@
 
   var entries = [];
   var timer = null;
+  // 再生チェーンの世代番号。チェーンの張り直し（クリック送り・掲示からの復帰）のたびに
+  // 進め、verifyHtml 待ちで取り残された旧チェーンのコールバックを無効化する。
+  // これが無いと、HTML枠の verify 待ち（timer=null の窓）に追加クリックが入ったとき
+  // 2本のタイマーループが恒久的に並走する
+  var playSeq = 0;
 
   // HTML 枠は表示するときだけ読み込む。裏でアニメーションが回り続けて
   // CPU を使い続けるのを避けるため（24時間稼働のため）。
@@ -194,31 +314,36 @@
     if (entry.type === 'html') entry.el.removeAttribute('src');
   }
 
-  function showEntry(i, skipped) {
+  function showEntry(i, skipped, seq) {
+    if (seq === undefined) seq = playSeq;   // チェーンの起点でだけ世代を取り込む
+    if (seq !== playSeq) return;
     var cur = entries[i];
     if (!cur) return;
     skipped = skipped || 0;
     if (skipped >= entries.length) {
       // すべての枠が読めなかった。詰めて回し続けず、間隔を置いて試し直す
-      timer = setTimeout(function () { showEntry(i, 0); }, DEFAULT_MS);
+      timer = setTimeout(function () { showEntry(i, 0, seq); }, DEFAULT_MS);
       return;
     }
     if (cur.type === 'html') {
       // ネット断のとき iframe に Chrome の障害画面が全画面で出るのを避ける
       verifyHtml(cur, function (ok) {
-        // 待っている間に掲示へ切り替わっていたら、何もせず捨てる
+        // 待っている間に掲示へ切り替わった／チェーンが張り直されたら、何もせず捨てる
         // （取り残されたコールバックが裏で iframe を読み込み、タイマーを張るのを防ぐ）
-        if (mode !== 'normal') return;
-        if (!ok) { showEntry((i + 1) % entries.length, skipped + 1); return; }
-        renderEntry(i);
+        if (mode !== 'normal' || seq !== playSeq) return;
+        if (!ok) { showEntry((i + 1) % entries.length, skipped + 1, seq); return; }
+        renderEntry(i, seq);
       });
       return;
     }
-    renderEntry(i);
+    renderEntry(i, seq);
   }
 
-  function renderEntry(i) {
-    if (mode !== 'normal') return;
+  function renderEntry(i, seq) {
+    if (mode !== 'normal' || seq !== playSeq) return;
+    // スライドの切替に同期して、ヘッダーの拡大表示も次の予定へ進める（ハンドオフの中核仕様）
+    phase++;
+    renderHeader();
     var cur = entries[i];
     entries.forEach(function (e, n) {
       if (n === i) return;
@@ -241,17 +366,19 @@
     }
     cur.el.classList.add('show');
     if (!only) {
-      timer = setTimeout(function () { showEntry((i + 1) % entries.length); }, cur.ms);
+      timer = setTimeout(function () { showEntry((i + 1) % entries.length, 0, seq); }, cur.ms);
     }
   }
 
   function startPlayback() {
+    playSeq++;
     if (timer) clearTimeout(timer);
     timer = null;
     if (entries.length) showEntry(0);
   }
 
   function stopPlayback() {
+    playSeq++;
     if (timer) clearTimeout(timer);
     timer = null;
     entries.forEach(function (e) {
@@ -271,54 +398,164 @@
   var overrideUrl = null;
   var loadedAt = Date.now();
 
-  // ---- 上部バナー（本日の占有情報） ----
-  // null = 一度も受信できていない。この間は帯を出さない
-  // （「終日ご利用いただけます」の誤表示が最悪ケースのため、安全側＝非表示に倒す）
+  // ---- 上部ヘッダー（本日の予定タイムライン） ----
+  // null = 一度も受信できていない。この間はヘッダーを出さない
+  // （「予約なし・利用可」の誤表示が最悪ケースのため、安全側＝非表示に倒す）
   var todayData = null;
-  var BANNER_MAX_ITEMS = 3;
-  var KIND_LABEL = { private: '貸切', open: 'イベント' };
+  // todayData を受信した日。日付が変わったら（次の poll まで）前日の予定を
+  // 「今日の予定」として出さないためのガード
+  var todayDataDay = null;
+  var phase = 0;                        // スライド切替に同期して進む拡大表示カウンター
+  var DAY_START = 450, DAY_END = 1200;  // タイムラインの表示時間帯 7:30–20:00（分）
+  // 貸切・部分利用の色はハンドオフの Design Tokens。open（イベント）はハンドオフに
+  // 無い第3の種別のため、イベント掲示（event-notice）系統の紫を割り当てた
+  var KIND_META = {
+    private: { label: '貸切', color: '#F59E0B' },
+    open: { label: 'イベント', color: '#A78BFA' },
+    partial: { label: '部分利用', color: '#2DD4BF' }
+  };
+  // 動作確認用: ?demo=HH:MM で現在時刻を固定（例 ?demo=10:45）
+  var DEMO_TIME = (function () {
+    var v = new URLSearchParams(location.search).get('demo') || '';
+    return /^\d{1,2}:\d{2}$/.test(v) ? v : null;
+  })();
 
-  function bannerLine(item) {
-    if (item.kind === 'partial') {
-      return item.start + '–' + item.end + ' 一部エリア利用中（ご入室いただけます）';
+  // 動作確認用: ?date=YYYY-MM-DD で対象日を切り替え（API にそのまま渡し、日付表示も差し替える）
+  var DEMO_DATE = (function () {
+    var v = new URLSearchParams(location.search).get('date') || '';
+    return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+  })();
+  if (DEMO_DATE && API_URL) {
+    API_URL += (API_URL.indexOf('?') < 0 ? '?' : '&') + 'date=' + DEMO_DATE;
+  }
+
+  // クリック（タップ）で次の枠へ強制送り。動作確認・早送り用。
+  // 表示中の HTML 枠（iframe）内のクリックは親に届かないため、画像枠でのみ効く
+  document.addEventListener('click', function () {
+    if (mode !== 'normal' || entries.length < 2) return;
+    playSeq++;   // verify 待ち中の旧チェーンを無効化してから張り直す
+    if (timer) clearTimeout(timer);
+    timer = null;
+    var i = -1;
+    entries.forEach(function (e, n) { if (e.el.classList.contains('show')) i = n; });
+    showEntry((i + 1) % entries.length);
+  });
+
+  // 1080×1920 のキャンバスをウィンドウに収まる倍率で縮小し中央に置く（実機では scale=1）
+  function fitCanvas() {
+    var s = Math.min(innerWidth / 1080, innerHeight / 1920);
+    document.body.style.transform = 'scale(' + s + ')';
+    document.body.style.marginLeft = Math.max(0, (innerWidth - 1080 * s) / 2) + 'px';
+    document.body.style.marginTop = Math.max(0, (innerHeight - 1920 * s) / 2) + 'px';
+  }
+  addEventListener('resize', fitCanvas);
+  fitCanvas();
+
+  var headerEl = document.getElementById('header');
+  var dateEl = document.getElementById('hd-date');
+  var clockEl = document.getElementById('hd-clock');
+  var timelineEl = document.getElementById('hd-timeline');
+  var focusEl = document.getElementById('hd-focus');
+
+  function nowMinutes() {
+    if (DEMO_TIME) {
+      var t = DEMO_TIME.split(':');
+      return (+t[0]) * 60 + (+t[1]);
     }
-    return item.start + '–' + item.end + ' ' + KIND_LABEL[item.kind];
+    var d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  }
+  function toMin(hhmm) { return (+hhmm.slice(0, 2)) * 60 + (+hhmm.slice(3, 5)); }
+  function pct(m) { return Math.max(0, Math.min(100, (m - DAY_START) / (DAY_END - DAY_START) * 100)); }
+  function fmtMin(m) { return Math.floor(m / 60) + ':' + ('0' + (m % 60)).slice(-2); }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
   }
 
-  function buildBannerText(n) {
-    var shown = todayData.slice(0, n).map(bannerLine);
-    var rest = todayData.length - n;
-    return '本日 ' + shown.join(' ／ ') + (rest > 0 ? ' ／ ほか' + rest + '件' : '');
-  }
-
-  function renderBanner() {
-    // 掲示中（private/open）も帯は出す。「何時に空くか」を知らせるのが帯の役目のため。
-    // 出さないのは次の3つ:
-    // - 一度も取得できていない（誤って「終日ご利用いただけます」を出さない安全側）
+  function renderHeader() {
+    // 掲示中（private/open）もヘッダーは出す。「何時に空くか」を知らせる役目のため。
+    // 出さないのは次の3つ（旧バナーの安全側挙動を引き継ぐ）:
+    // - 一度も取得できていない（誤って「予約なし・利用可」を出さない）
     // - 臨時URL中（運用者による画面の完全な乗っ取りなので邪魔しない）
-    // - 掲示中なのに当日予定が空（強制貸切フラグ運用時。「終日ご利用いただけます」と矛盾するため）
-    var hide = todayData === null || mode === 'override' ||
+    // - 掲示中なのに当日予定が空（強制貸切フラグ運用時。「予約なし」と矛盾するため）
+    // 日付が変わって以降まだ poll できていない間は「未取得」と同じ扱いで隠す
+    // （前日の予定が新しい日付の下に「今日の予定」として出るのを防ぐ。date 指定時は対象外）
+    var stale = !DEMO_DATE && todayDataDay !== null &&
+      todayDataDay !== new Date().toDateString();
+    var hide = todayData === null || stale || mode === 'override' ||
       (mode !== 'normal' && !todayData.length);
     if (hide) {
-      document.body.classList.remove('with-banner');
-      bannerEl.classList.remove('visible');
+      document.body.classList.remove('with-header');
+      headerEl.classList.remove('visible');
       return;
     }
-    // クラスを先に付けて可視化してから測る（非表示のままだと clientHeight が 0 になるため）
-    document.body.classList.add('with-banner');
-    bannerEl.classList.add('visible');
-    if (!todayData.length) {
-      bannerTextEl.textContent = '本日は終日ご利用いただけます';
-      return;
+    document.body.classList.add('with-header');
+    headerEl.classList.add('visible');
+
+    var nowMin = nowMinutes();
+    var now = DEMO_DATE ? new Date(DEMO_DATE + 'T00:00:00') : new Date();
+    var days = ['日', '月', '火', '水', '木', '金', '土'];
+    dateEl.textContent = (now.getMonth() + 1) + '月' + now.getDate() +
+      '日（' + days[now.getDay()] + '）';
+    var clockParts = (DEMO_TIME || fmtMin(nowMin)).split(':');
+    clockEl.innerHTML = clockParts[0] + '<span class="colon">:</span>' + clockParts[1];
+
+    var items = todayData.map(function (s) {
+      return { s: toMin(s.start), e: toMin(s.end), kind: s.kind, label: s.label || '' };
+    });
+    // 拡大表示の巡回: 終了済みも含めた当日の全予定を開始時刻順に、各1周期ずつ表示。
+    // ただし進行中の予定は連続2周期（いま一番重要な情報のため）。
+    // これ以降の予定が無いときは「予約なし・利用可」カード（null）を1周期加える
+    var upcoming = items.filter(function (ev) { return ev.e > nowMin; });
+    var slots = [];
+    items.forEach(function (ev) {
+      slots.push(ev);
+      if (ev.s <= nowMin && nowMin < ev.e) slots.push(ev);
+    });
+    // 「予約なし・利用可」カードは通常表示のときだけ。掲示中（貸切・イベント、
+    // 強制貸切フラグ含む）に出すとドアの掲示と矛盾する
+    if (!upcoming.length && mode === 'normal') slots.push(null);
+    var focused = slots.length ? slots[phase % slots.length] : null;
+
+    var html = '';
+    for (var h = 8; h <= 20; h++) {
+      var p = pct(h * 60);
+      html += '<div class="tick-label" style="left:' + p + '%">' + h + '</div>' +
+        '<div class="tick-line" style="left:' + p + '%"></div>';
     }
-    // 表示件数 n を min(件数,3) から 1 まで降順に試し、実測して2行(clientHeight)に
-    // 収まる最初の n を採用する。どの n でも収まらなければ n=1（ほか◯件付き）で妥協する
-    var maxN = Math.min(todayData.length, BANNER_MAX_ITEMS);
-    for (var n = maxN; n >= 1; n--) {
-      bannerTextEl.textContent = buildBannerText(n);
-      if (bannerTextEl.scrollHeight <= bannerTextEl.clientHeight) return;
+    html += '<div class="track"></div>';
+    items.forEach(function (ev) {
+      html += '<div class="block' + (ev.e <= nowMin ? ' ended' : '') +
+        (ev === focused ? ' focused' : '') + '" style="left:' + pct(ev.s) +
+        '%;width:' + (pct(ev.e) - pct(ev.s)) + '%;background:' +
+        KIND_META[ev.kind].color + '"></div>';
+    });
+    html += '<div class="nowline" style="left:' + pct(nowMin) + '%"></div>';
+    if (focused) {
+      html += '<div class="caret" style="left:' +
+        ((pct(focused.s) + pct(focused.e)) / 2) + '%"></div>';
     }
-    // ここに来るのは n=1 でも収まらない場合。ループ末尾で設定済みの n=1 表示のまま妥協する
+    timelineEl.innerHTML = html;
+
+    if (focused) {
+      var fMeta = KIND_META[focused.kind];
+      var isEnded = focused.e <= nowMin;
+      var isLive = focused.s <= nowMin && nowMin < focused.e;
+      focusEl.classList.toggle('ended', isEnded);
+      focusEl.innerHTML =
+        '<div class="f-time">' + fmtMin(focused.s) + '–' + fmtMin(focused.e) + '</div>' +
+        '<div class="f-text"><span class="f-badge" style="background:' + fMeta.color + '">' +
+          fMeta.label + '</span>' + esc(focused.label || '') + '</div>' +
+        (isEnded ? '<div class="f-done">終了済み</div>' :
+          (isLive ? '<div class="f-live">進行中</div>' : ''));
+    } else {
+      focusEl.classList.remove('ended');
+      focusEl.innerHTML =
+        '<div class="f-free">予約なし・利用可</div>' +
+        '<div class="f-free-sub">本日これ以降の予約はありません</div>';
+    }
   }
 
   // 匿名 API のため表示側でも形を検査する（override の https 再確認と同じ思想）
@@ -332,7 +569,12 @@
     // 要素はあったが全部フィルタで落ちた場合、「本当に予定なし」と区別できないため
     // 前回内容を保持する安全側（null）に倒す。空配列の入力（本当に予定なし）はそのまま返す
     if (list.length > 0 && filtered.length === 0) return null;
-    return filtered.map(function (s) { return { start: s.start, end: s.end, kind: s.kind }; });
+    return filtered.map(function (s) {
+      return {
+        start: s.start, end: s.end, kind: s.kind,
+        label: typeof s.label === 'string' ? s.label : ''
+      };
+    });
   }
 
   function noticeSrc() {
@@ -356,7 +598,7 @@
       slidesEl.classList.remove('active');
       noticeEl.classList.add('active');
     }
-    renderBanner();
+    renderHeader();
   }
 
   function poll() {
@@ -371,15 +613,40 @@
         } else if (j.mode === 'private' || j.mode === 'open' || j.mode === 'normal') {
           apply(j.mode, null);
         }
-        var t = sanitizeToday(j.today);
-        if (t !== null) todayData = t;   // today 無し・形不正なら前回内容を保持
-        renderBanner();
+        // todayFull（終了済み込み・label 付き）を優先し、無い間は旧 today で代用
+        // （旧 today は終了済みをサーバー側で除外しているため、タイムラインに残らないだけ）
+        var t = sanitizeToday(j.todayFull);
+        if (t === null) t = sanitizeToday(j.today);
+        if (t !== null) {                // どちらも無し・形不正なら前回内容を保持
+          todayData = t;
+          todayDataDay = new Date().toDateString();
+        }
+        renderHeader();
         if (mode === 'normal' && Date.now() - loadedAt > RELOAD_MS) location.reload();
       })
       .catch(function () { /* ネット断時は最後の表示を維持 */ });
   }
   poll();
   setInterval(poll, POLL_MS);
+
+  // 時計・現在時刻ライン・終了済み/進行中判定を追従させる。
+  // 表示は HH:MM なので、分が変わったときだけ再描画する
+  var lastMinute = -1;
+  setInterval(function () {
+    var m = nowMinutes();
+    if (m !== lastMinute) { lastMinute = m; renderHeader(); }
+  }, 1000);
+
+  // 拡大表示の巡回はスライド切替に同期して進む（renderEntry 内の phase++）。
+  // スライドが1枚以下・掲示中はフェードが起きないため、こちらの固定周期で回す
+  var FOCUS_FALLBACK_MS = 15000;
+  setInterval(function () {
+    if (headerEl.classList.contains('visible') &&
+        (mode !== 'normal' || entries.length <= 1)) {
+      phase++;
+      renderHeader();
+    }
+  }, FOCUS_FALLBACK_MS);
 })();
 </script>
 </body>
