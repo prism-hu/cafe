@@ -14,11 +14,14 @@
 <!--
   ============================================================
   サイエンスカフェ サイネージシェル（ミニPC キオスク表示用）
-  - 通常時: slides/ に置かれた画像（001.jpg〜030.jpg のうち実在するもの）をオートプレイ。
-    枚数はコードに書かず起動時に探すので、画像を足す・消すだけで変えられる（欠番があってもよい）。
-    slides/playlist.json で宣言した HTML 枠（アニメーション等）もこの巡回に加わる
+  - 通常時: slides/ に置かれたファイルをオートプレイ。情報源はファイル名規約
+    {slot}_{name}_{style}_{period}.{ext} だけで、人が編集する設定ファイルは無い。
+    .html は空ファイルのマーカーで、実体 ../frames/{name}/ を iframe 表示する
+  - 一覧はデプロイ時に CI が機械生成する slides/manifest.json から取得（静的ホスティングは
+    ディレクトリ一覧を返せないため）。読めなければ slides/ の fetch 結果（python
+    http.server のディレクトリリスティング HTML）から href を抽出して代用（ローカル確認用）
   - 時間進行は period（20秒）単位のマスタータイマー1本。各スライドは N period 表示され、
-    切替は period の拍でのみ起きる（playlist.json の period フィールドで宣言）
+    切替は period の拍でのみ起きる（period 数はファイル名で宣言）
   - 上部140pxは本日の予定タイムラインヘッダー（常設）。拡大表示は毎 period 次の予定へ
     巡回する（長い HTML 枠の間も止まらない）。デザインは design_handoff_signage のモックが正
   - 動作確認用パラメータ: ?demo=HH:MM で現在時刻を固定、?date=YYYY-MM-DD で対象日を切り替え。
@@ -159,7 +162,7 @@
     border: 0; opacity: 0; transition: opacity 1s;
   }
   #slides iframe.show { opacity: 1; }
-  /* cover 指定の枠（playlist.json の "cover" にスロット番号を列挙）:
+  /* cover 指定の枠（ファイル名の style フィールドで宣言）:
      余白（黒帯）を作らず全面に出す。ヘッダー表示中は縦が 1780px に詰まるため、
      1080×1920 設計のポスターは上下 70px ずつ切れる。切れて困る枠は指定しない */
   #slides img.cover { object-fit: cover; }
@@ -191,7 +194,6 @@
   var PERIOD_MS = 20000;
   var POLL_MS = 120000;                  // 表示モードの問い合わせ間隔
   var RELOAD_MS = 24 * 60 * 60 * 1000;   // 通常表示中の定期リロード間隔
-  var MAX_SLIDES = 30;                   // slides/001.jpg〜030.jpg まで探す（USB運用の命名規則に合わせた上限）
   // 表示モード API（GAS doGet）。?api= で上書きできる（ローカルモック等）
   var DEFAULT_API = 'https://script.google.com/macros/s/AKfycbzhhXCd4jsPEfHMG5MhsjfjXsBM4ToHzb-fuNXZKEQlKOI-X_j-s-QdUadsx_wOfPGp/exec';
   var API_URL = new URLSearchParams(location.search).get('api') || DEFAULT_API;
@@ -209,38 +211,70 @@
   var slidesEl = document.getElementById('slides');
   var noticeEl = document.getElementById('notice');
 
-  // 画像は従来どおり slides/ に実在するものを起動時に探す。
-  // 事務室が画像を置く・消すだけで枚数を変えられるようにするため。欠番があってもよい。
-  function findImages(done) {
-    var found = [];
-    var remaining = MAX_SLIDES;
-    function finish() {
-      if (--remaining > 0) return;
-      done(found);
-    }
-    for (var i = 1; i <= MAX_SLIDES; i++) {
-      (function (n) {
-        var slot = ('00' + n).slice(-3);
-        var src = 'slides/' + slot + '.jpg';
-        var probe = new Image();
-        probe.onload = function () {
-          found.push({ slot: slot, type: 'image', src: src, periods: 1 });
-          finish();
-        };
-        probe.onerror = finish;
-        probe.src = src;
-      })(i);
-    }
+  // ファイル名規約: {slot}_{name}_{style}_{period}.{ext}
+  //   例) 01_kakenhi-ura_contain_01.jpg / 06_support-promo_cover_02.html
+  // これだけが情報源で、人が編集する設定ファイルは無い。
+  // .html は空ファイルのマーカーで、実体は ../frames/{name}/ にある。
+  // マッチしないファイルは取り込まず console.warn で列挙する（診断用）
+  var NAME_RE = /^(\d{2})_([a-z0-9-]+)_(cover|contain)_(\d{2})\.(jpe?g|png|html)$/;
+
+  // 一覧の取得。静的ホスティング（CF Pages）はディレクトリ一覧を返せないため、
+  // 本番はデプロイ時に CI が機械生成する slides/manifest.json（{"files":[...]}）を読む。
+  // 読めなければ slides/ の fetch 結果（python http.server のディレクトリリスティング
+  // HTML）から href を抽出して代用する（ローカル確認用）
+  function fetchNames(done) {
+    var finish = once(done);
+    setTimeout(function () { finish([]); }, FETCH_TIMEOUT_MS);
+    fetch('slides/manifest.json', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j || !Array.isArray(j.files)) throw new Error('manifest 形式不正');
+        finish(j.files.filter(function (f) { return typeof f === 'string'; }));
+      })
+      .catch(function () {
+        fetch('slides/', { cache: 'no-store' })
+          .then(function (r) { return r.text(); })
+          .then(function (t) {
+            var names = [], re = /href="([^"]+)"/g, m;
+            while ((m = re.exec(t))) {
+              var p = decodeURIComponent(m[1]).split('?')[0].split('/').pop();
+              if (p) names.push(p);
+            }
+            finish(names);
+          })
+          .catch(function () { finish([]); });
+      });
   }
 
-  // HTML 枠は playlist.json で宣言する。このサイトは存在しないパスにも 200 で
-  // 代替ページを返すため、画像のように「置いてあるか探す」方式が使えない。
-  // 取得できない・JSON でない・形式が違う場合は空扱いにし、画像だけで動かす。
+  function parseNames(names) {
+    var entries = [], ignored = [];
+    names.forEach(function (name) {
+      var m = NAME_RE.exec(name);
+      if (!m) {
+        if (name !== 'manifest.json') ignored.push(name);
+        return;
+      }
+      var isHtml = m[5] === 'html';
+      entries.push({
+        slot: m[1],
+        type: isHtml ? 'html' : 'image',
+        src: isHtml ? '../frames/' + m[2] + '/' : 'slides/' + name,
+        cover: m[3] === 'cover',
+        periods: Math.max(1, +m[4])
+      });
+    });
+    if (ignored.length) console.warn('規約名でないためスキップ:', ignored.join(', '));
+    return entries.sort(function (a, b) {
+      return a.slot < b.slot ? -1 : (a.slot > b.slot ? 1 : 0);
+    });
+  }
+
+  // このサイトは存在しないパスにも 200 で代替ページを返すため、
+  // HTML 枠は取得できたことが実在の証明にならない。
   var SLIDE_MARKER = '<!-- signage-slide -->';
 
-  // 取得できたことは実在の証明にならない（代替ページも 200 で返る）ので、
-  // 目印を含むものだけを採用する。パスを間違えたときに無関係なページが
-  // 35秒表示され続けるのを防ぐ。
+  // 目印を含むものだけを採用する。name を間違えたときに無関係なページが
+  // 長時間表示され続けるのを防ぐ。
   function verifyHtml(entry, done) {
     var finish = once(done);
     setTimeout(function () { finish(null); }, FETCH_TIMEOUT_MS);
@@ -250,44 +284,14 @@
       .catch(function () { finish(null); });
   }
 
-  function fetchExtras(done) {
-    var finish = once(function (r) { done(r.list, r.cover); });
-    setTimeout(function () { finish({ list: [], cover: [] }); }, FETCH_TIMEOUT_MS);
-    fetch('slides/playlist.json', { cache: 'no-store' })
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
-        // cover の書式ミス（非配列など）で slides まで巻き添えにしないよう、型を厳密に見る
-        var cover = (j && Array.isArray(j.cover))
-          ? j.cover.filter(function (s) { return typeof s === 'string'; })
-          : [];
-        var list = ((j && j.slides) || []).filter(function (s) {
-          return s && typeof s.slot === 'string' && typeof s.path === 'string';
-        }).map(function (s) {
-          // 表示時間は period 単位で宣言する。旧形式の seconds は切り上げで読み替える
-          var per = (typeof s.period === 'number' && s.period >= 1)
-            ? Math.round(s.period)
-            : ((typeof s.seconds === 'number' && s.seconds > 0)
-              ? Math.max(1, Math.ceil(s.seconds * 1000 / PERIOD_MS)) : 1);
-          return { slot: s.slot, type: 'html', src: s.path, periods: per };
-        });
-        if (!list.length) return finish({ list: [], cover: cover });
-        var checked = [];
-        var remaining = list.length;
-        list.forEach(function (entry) {
-          verifyHtml(entry, function (ok) {
-            if (ok) checked.push(ok);
-            if (--remaining === 0) finish({ list: checked, cover: cover });
-          });
-        });
-      })
-      .catch(function () { finish({ list: [], cover: [] }); });
-  }
-
   function buildEntries(done) {
-    findImages(function (images) {
-      fetchExtras(function (extras, coverSlots) {
-        var entries = images.concat(extras).sort(function (a, b) {
-          return a.slot < b.slot ? -1 : (a.slot > b.slot ? 1 : 0);
+    fetchNames(function (names) {
+      var list = parseNames(names);
+      var htmls = list.filter(function (e) { return e.type === 'html'; });
+      var remaining = htmls.length;
+      function assemble() {
+        var entries = list.filter(function (e) {
+          return e.type === 'image' || e.verified;
         });
         entries.forEach(function (e) {
           var el;
@@ -299,11 +303,18 @@
             el.title = 'スライド';
           }
           el.setAttribute('data-slot', e.slot);
-          if (coverSlots.indexOf(e.slot) >= 0) el.classList.add('cover');
+          if (e.cover) el.classList.add('cover');
           slidesEl.appendChild(el);
           e.el = el;
         });
         done(entries);
+      }
+      if (!remaining) return assemble();
+      htmls.forEach(function (entry) {
+        verifyHtml(entry, function (ok) {
+          if (ok) entry.verified = true;
+          if (--remaining === 0) assemble();
+        });
       });
     });
   }

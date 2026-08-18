@@ -1,2 +1,4 @@
 .wrangler/
 node_modules/
+# デプロイ時に CI（deploy.yml）が slides/ のファイル名から機械生成する。人は編集しない
+public/signage/slides/manifest.json

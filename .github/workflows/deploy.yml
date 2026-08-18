@@ -15,6 +15,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # サイネージのスライド一覧をファイル名から機械生成する（静的ホスティングは
+      # ディレクトリ一覧を返せないため）。情報源はあくまで slides/ のファイル名で、
+      # manifest.json を人が編集することはない（repo では gitignore、ここでのみ生成）
+      - name: Generate slides manifest
+        run: |
+          cd public/signage/slides
+          ls -1 | jq -R -s 'split("\n") | map(select(. != "" and . != "manifest.json")) | {files: .}' > manifest.json
+          cat manifest.json
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
