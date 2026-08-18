@@ -62,8 +62,7 @@ gas/
   ext は `jpg`/`jpeg`/`png`/`html`。例: `01_kakenhi-ura_contain_01.jpg`。
   規約にマッチしないファイルは取り込まず console.warn に列挙
 - 一覧の取得: **第一情報源は Google Drive フォルダを列挙する GAS Web アプリ**
-  （コード内 `SLIDES_API`。GAS のコードは repo の `gas/slides/` が正、clasp で push・deploy）。
-  **事務室は Drive のフォルダに規約名のファイルを置く・消すだけでよい**（画像は Drive 直リンクで表示）。
+  （詳細は「[スライドの Google Drive 管理](#スライドの-google-drive-管理)」）。
   取得できなければ repo 内 `slides/` に落ちる: デプロイ時に CI が機械生成する
   `slides/manifest.json`（repo では gitignore、人は編集しない）→ それも読めなければ
   python http.server のディレクトリリスティングを解析して代用（ローカル確認用）。
@@ -90,6 +89,49 @@ gas/
 - レイアウトは 1080×1920 固定キャンバスを scale でウィンドウに収める（実機では等倍）。
   動作確認用に `?demo=HH:MM`（時刻固定）・`?date=YYYY-MM-DD`（対象日切替）・
   クリックで次の枠へ強制送り
+
+## スライドの Google Drive 管理
+
+通常表示のスライドは Google Drive のフォルダが第一情報源（2026-08-18 移行、経緯は issue #6）。
+
+### フォルダ
+
+- マイドライブ `共有/PRISM/サイエンスカフェ/サイネージ`
+  （folder id `1b_iQEGOOK3nR4g3dLVZh3v_vIimdtAOh`）
+- 所有: buhibuhidog@gmail.com（ken）。**事務室アカウント prism.hu.office@gmail.com が編集者** —
+  ポスターの追加・差し替え・削除はこのフォルダ上のファイル操作だけで完結する
+- 共有: **「リンクを知っている全員: 閲覧者」**。サイネージ（公開ページ）が画像を認証なしの
+  直リンクで表示するために必要 — この設定を外すと画像が表示されなくなる
+- 置くファイルはファイル名規約（上記サイネージ節）に従う。マッチしないファイルは
+  取り込まれない（console.warn に列挙されるだけで実害はない）
+
+### 一覧 API（GAS）
+
+- Apps Script プロジェクト「カフェサイネージ スライド一覧API (cafe-signage-slides)」。
+  ken 所有。**正本は repo の `gas/slides/`**（scriptId は同ディレクトリの `.clasp.json`）。
+  予約・表示モードの GAS（同僚管理、repo 外）とは別物
+- doGet はフォルダ内の全ファイルを `{"files": [{"name", "id"}]}` で返すだけ。
+  規約の解釈（slot / style / period・並び順・無視の判断）はすべて表示側
+  （`signage/index.html`）が一手に持つ
+- Web アプリ設定（`appsscript.json`）: 実行者=所有者 / アクセス=全員（匿名）。
+  スコープは `drive.readonly` のみ。**初回のみ所有者の OAuth 承認が必要**
+  （承認するまで /exec は JSON ではなく承認要求ページを返す）
+- デプロイメント ID（/exec URL）は `signage/index.html` の `DEFAULT_SLIDES_API` に埋めてある。
+  コード更新時は URL を変えないため redeploy で既存デプロイメントを更新する:
+
+  ```sh
+  cd gas/slides
+  npx -y @google/clasp push
+  npx -y @google/clasp redeploy <デプロイメントID> -d "説明"
+  ```
+
+### 画像の配信・反映タイミング
+
+- 画像は `https://lh3.googleusercontent.com/d/{id}=w1080` の直リンクで表示
+  （`=w1080` は実機キャンバス幅へのサーバー側縮小。原寸の重い JPEG をそのまま配らない）
+- 一覧の取得はページ読み込み時の1回だけ。Drive の変更が画面に反映されるのは
+  **normal 中24時間ごとの自動リロード**または手動リロード時
+  （fetch は `no-store` なのでハードリロードは不要。起動時に1枚も取れなければ1分おきに再試行）
 
 ## 運用メモ
 
