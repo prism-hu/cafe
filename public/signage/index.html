@@ -485,6 +485,7 @@
     advancing = false;
     current = -1;
     periodsLeft = 0;
+    restartBeat();   // 先頭の枠にも丸ごとの1 period 目を与える
     if (entries.length) showEntry(0);
   }
 
@@ -556,6 +557,7 @@
     playSeq++;   // verify 待ち中の旧チェーンを無効化してから張り直す
     phase++;
     renderHeader();
+    restartBeat();   // 進行中の拍の残りを新しい枠が引き継いで早々に切り替わらないように
     showEntry((current < 0 ? 0 : (current + 1) % entries.length));
   });
 
@@ -783,7 +785,7 @@
   // 消費して尽きたら次の枠へ。スライド切替とヘッダー巡回が同じ拍で起きる
   // （ハンドオフの「1つのタイマーでフェードと拡大表示を同期」の実装）。
   // 掲示中・スライド1枚のときも (1) は動き続ける
-  setInterval(function () {
+  function periodTick() {
     phase++;
     renderHeader();
     if (mode !== 'normal' || !entries.length) return;
@@ -792,7 +794,17 @@
     if (entries.length === 1) return;      // 1枠はページ自身のループに任せる
     if (--periodsLeft <= 0) { showEntry((current + 1) % entries.length); return; }
     ringResync(periodsLeft * PERIOD_MS);
-  }, PERIOD_MS);
+  }
+
+  // 拍の(再)スタート。クリック送り・再生開始では拍そのものを張り直し、
+  // 進行中だった拍の残り時間を新しい枠が引き継がないようにする
+  // （引き継ぐと、拍の終わり際の操作で数秒しか表示されない枠ができる）
+  var periodTimer = null;
+  function restartBeat() {
+    if (periodTimer) clearInterval(periodTimer);
+    periodTimer = setInterval(periodTick, PERIOD_MS);
+  }
+  restartBeat();
 })();
 </script>
 </body>
