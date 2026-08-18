@@ -17,9 +17,11 @@
   - 通常時: slides/ に置かれたファイルをオートプレイ。情報源はファイル名規約
     {slot}_{name}_{style}_{period}.{ext} だけで、人が編集する設定ファイルは無い。
     .html は空ファイルのマーカーで、実体 ../frames/{name}/ を iframe 表示する
-  - 一覧はデプロイ時に CI が機械生成する slides/manifest.json から取得（静的ホスティングは
-    ディレクトリ一覧を返せないため）。読めなければ slides/ の fetch 結果（python
-    http.server のディレクトリリスティング HTML）から href を抽出して代用（ローカル確認用）
+  - 一覧の第一情報源は Google Drive フォルダを列挙する GAS Web アプリ（SLIDES_API、
+    コードは repo の gas/slides/）。事務室は Drive にファイルを置く・消すだけでよい。
+    取得できなければ repo 内 slides/ に落ちる: CI が機械生成する slides/manifest.json →
+    それも無ければ slides/ の fetch 結果（python http.server のディレクトリリスティング
+    HTML）から href を抽出して代用（ローカル確認用）
   - 時間進行は period（20秒）単位のマスタータイマー1本。各スライドは N period 表示され、
     切替は period の拍でのみ起きる（period 数はファイル名で宣言）
   - 上部140pxは本日の予定タイムラインヘッダー（常設）。拡大表示は毎 period 次の予定へ
@@ -197,6 +199,13 @@
   // 表示モード API（GAS doGet）。?api= で上書きできる（ローカルモック等）
   var DEFAULT_API = 'https://script.google.com/macros/s/AKfycbzhhXCd4jsPEfHMG5MhsjfjXsBM4ToHzb-fuNXZKEQlKOI-X_j-s-QdUadsx_wOfPGp/exec';
   var API_URL = new URLSearchParams(location.search).get('api') || DEFAULT_API;
+  // スライド一覧 API（Drive フォルダを列挙する GAS。コードは repo の gas/slides/）。
+  // ?slides= で上書きできる。空文字（?slides=）にすると repo 内 slides/ だけで動く
+  var DEFAULT_SLIDES_API = 'https://script.google.com/macros/s/AKfycbz9TlN3F3xGS56jaXtnV7hBguQ-wks6nQ3mUW3Cmpa7ZUvZ3ueOP30jdFGxIy3WS4c/exec';
+  var SLIDES_API = (function () {
+    var v = new URLSearchParams(location.search).get('slides');
+    return v === null ? DEFAULT_SLIDES_API : v;
+  })();
 
   // 応答が返らないまま止まる（半開き接続・キャプティブポータル等）と再生列が
   // 組み上がらず黒画面が続くため、必ず時間で打ち切る。
@@ -218,47 +227,70 @@
   // マッチしないファイルは取り込まず console.warn で列挙する（診断用）
   var NAME_RE = /^(\d{2})_([a-z0-9-]+)_(cover|contain)_(\d{2})\.(jpe?g|png|html)$/;
 
-  // 一覧の取得。静的ホスティング（CF Pages）はディレクトリ一覧を返せないため、
-  // 本番はデプロイ時に CI が機械生成する slides/manifest.json（{"files":[...]}）を読む。
-  // 読めなければ slides/ の fetch 結果（python http.server のディレクトリリスティング
-  // HTML）から href を抽出して代用する（ローカル確認用）
+  // 一覧の取得。返すのは {name, id?} の配列（id は Drive のファイル id、repo 内のときは無し）。
+  // 第一情報源は Drive フォルダを列挙する GAS（SLIDES_API）。取得できなければ repo 内
+  // slides/ に落ちる: 静的ホスティング（CF Pages）はディレクトリ一覧を返せないため、
+  // デプロイ時に CI が機械生成する slides/manifest.json（{"files":[...]}）を読み、
+  // それも読めなければ slides/ の fetch 結果（python http.server のディレクトリ
+  // リスティング HTML）から href を抽出して代用する（ローカル確認用）
   function fetchNames(done) {
     var finish = once(done);
     setTimeout(function () { finish([]); }, FETCH_TIMEOUT_MS);
-    fetch('slides/manifest.json', { cache: 'no-store' })
+    function tryListing() {
+      fetch('slides/', { cache: 'no-store' })
+        .then(function (r) { return r.text(); })
+        .then(function (t) {
+          var items = [], re = /href="([^"]+)"/g, m;
+          while ((m = re.exec(t))) {
+            var p = decodeURIComponent(m[1]).split('?')[0].split('/').pop();
+            if (p) items.push({ name: p });
+          }
+          finish(items);
+        })
+        .catch(function () { finish([]); });
+    }
+    function tryManifest() {
+      fetch('slides/manifest.json', { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j || !Array.isArray(j.files)) throw new Error('manifest 形式不正');
+          finish(j.files.filter(function (f) { return typeof f === 'string'; })
+            .map(function (f) { return { name: f }; }));
+        })
+        .catch(tryListing);
+    }
+    if (!SLIDES_API) return tryManifest();
+    fetch(SLIDES_API, { redirect: 'follow', cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (j) {
-        if (!j || !Array.isArray(j.files)) throw new Error('manifest 形式不正');
-        finish(j.files.filter(function (f) { return typeof f === 'string'; }));
+        if (!j || !Array.isArray(j.files)) throw new Error('slides API 形式不正');
+        finish(j.files.filter(function (f) {
+          return f && typeof f.name === 'string' && typeof f.id === 'string';
+        }));
       })
-      .catch(function () {
-        fetch('slides/', { cache: 'no-store' })
-          .then(function (r) { return r.text(); })
-          .then(function (t) {
-            var names = [], re = /href="([^"]+)"/g, m;
-            while ((m = re.exec(t))) {
-              var p = decodeURIComponent(m[1]).split('?')[0].split('/').pop();
-              if (p) names.push(p);
-            }
-            finish(names);
-          })
-          .catch(function () { finish([]); });
-      });
+      .catch(tryManifest);
   }
 
-  function parseNames(names) {
+  // Drive 上の画像の直リンク（リンク共有されているファイルを <img> で表示できる）。
+  // =w1080 は実機キャンバス幅に合わせたサーバー側縮小（原寸 2160px 級を配らない）
+  function driveImageUrl(id) {
+    return 'https://lh3.googleusercontent.com/d/' + id + '=w1080';
+  }
+
+  function parseNames(items) {
     var entries = [], ignored = [];
-    names.forEach(function (name) {
-      var m = NAME_RE.exec(name);
+    items.forEach(function (item) {
+      var m = NAME_RE.exec(item.name);
       if (!m) {
-        if (name !== 'manifest.json') ignored.push(name);
+        if (item.name !== 'manifest.json') ignored.push(item.name);
         return;
       }
       var isHtml = m[5] === 'html';
       entries.push({
         slot: m[1],
         type: isHtml ? 'html' : 'image',
-        src: isHtml ? '../frames/' + m[2] + '/' : 'slides/' + name,
+        src: isHtml ? '../frames/' + m[2] + '/'
+          : (item.id ? driveImageUrl(item.id) : 'slides/' + item.name),
         cover: m[3] === 'cover',
         periods: Math.max(1, +m[4])
       });
@@ -407,12 +439,19 @@
     });
   }
 
-  buildEntries(function (list) {
-    entries = list;
-    // 起動直後に掲示モードの応答が先に返っていることがあるため、
-    // 通常表示のときだけ再生を始める（掲示中に裏で回り続けるのを防ぐ）
-    if (mode === 'normal') startPlayback();
-  });
+  // 一覧の取得元がリモート（GAS）になったため、起動時の一時障害で1枚も
+  // 得られないことがある。そのまま24時間（定期リロードまで）真っ黒に
+  // ならないよう、空のときは1分おきに取り直す
+  function initEntries() {
+    buildEntries(function (list) {
+      if (!list.length) { setTimeout(initEntries, 60000); return; }
+      entries = list;
+      // 起動直後に掲示モードの応答が先に返っていることがあるため、
+      // 通常表示のときだけ再生を始める（掲示中に裏で回り続けるのを防ぐ）
+      if (mode === 'normal') startPlayback();
+    });
+  }
+  initEntries();
 
   var mode = 'normal';
   var overrideUrl = null;

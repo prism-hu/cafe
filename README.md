@@ -21,6 +21,8 @@ public/
     ├── event-notice.html       # オープン開催中の掲示（全画面）
     ├── qr-cafe.png             # ヘッダー内 QR（→ cafe.prism-hu.org）
     └── slides/                 # スライド（ファイル名規約 {slot}_{name}_{style}_{period}.{ext}）
+gas/
+└── slides/                     # スライド一覧 API（Drive フォルダを列挙する GAS。clasp で push・deploy）
 ```
 
 ### 案内LP（`/`）
@@ -59,9 +61,13 @@ public/
   style は `cover`（全面）/ `contain`（黒帯あり）、period は表示 period 数（2桁）、
   ext は `jpg`/`jpeg`/`png`/`html`。例: `01_kakenhi-ura_contain_01.jpg`。
   規約にマッチしないファイルは取り込まず console.warn に列挙
-- 一覧の取得: 静的ホスティングはディレクトリ一覧を返せないため、デプロイ時に CI が
-  `slides/manifest.json`（ファイル名の配列）を機械生成する（repo では gitignore、人は編集しない）。
-  manifest が読めないローカル確認時は python http.server のディレクトリリスティングを解析して代用
+- 一覧の取得: **第一情報源は Google Drive フォルダを列挙する GAS Web アプリ**
+  （コード内 `SLIDES_API`。GAS のコードは repo の `gas/slides/` が正、clasp で push・deploy）。
+  **事務室は Drive のフォルダに規約名のファイルを置く・消すだけでよい**（画像は Drive 直リンクで表示）。
+  取得できなければ repo 内 `slides/` に落ちる: デプロイ時に CI が機械生成する
+  `slides/manifest.json`（repo では gitignore、人は編集しない）→ それも読めなければ
+  python http.server のディレクトリリスティングを解析して代用（ローカル確認用）。
+  `?slides=` で上書き可（空にすると repo 内 slides/ だけで動く）
 - HTML 枠はスライドとしては**空の `.html` ファイル**（例 `06_support-promo_cover_02.html`）で宣言し、
   実体は `public/frames/{name}/` に置く。実在確認として本文に `<!-- signage-slide -->` マーカーを
   含むものだけ採用（このサイトは 404 でも 200 で代替ページを返すため）
@@ -87,8 +93,9 @@ public/
 
 ## 運用メモ
 
-- ポスター追加: `public/signage/slides/` に規約名（`{slot}_{name}_{style}_{period}.jpg`）の
-  ファイルを置いて master へ push するだけ
+- ポスター追加: Drive のスライドフォルダに規約名（`{slot}_{name}_{style}_{period}.jpg`）の
+  ファイルを置くだけ（repo の変更・デプロイ不要。反映はサイネージのリロード時）。
+  repo 内 `public/signage/slides/` は Drive が読めないときのフォールバック
 - 掲示切替: 管理シート（GAS）側の操作。repo の変更は不要
 - QR 再生成: 飛び先 URL を変える場合は door-notice / event-notice / qr-cafe.png を作り直す
 - Cloudflare 側の secrets（GitHub environment `production`）:
