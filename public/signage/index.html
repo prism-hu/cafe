@@ -169,6 +169,23 @@
      1080×1920 設計のポスターは上下 70px ずつ切れる。切れて困る枠は指定しない */
   #slides img.cover { object-fit: cover; }
   body.with-header #slides iframe.cover { top: -70px; height: calc(100% + 140px); }
+  /* 右下のカウントダウンリング: 表示中の枠の残り時間（periods × 20s）が減るほど
+     弧が痩せ、切替で満ちる。どんなポスターの上でも見えるよう半透明の座布団付き。
+     通常表示中だけ出す（掲示・臨時URL・1枠のみ・未表示中は出さない） */
+  #ring {
+    position: absolute; right: 24px; bottom: 24px; width: 64px; height: 64px;
+    z-index: 5; display: none; pointer-events: none;
+  }
+  #ring.visible { display: block; }
+  #ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  #ring .bg {
+    fill: rgba(16, 24, 40, 0.45); stroke: rgba(241, 245, 249, 0.25); stroke-width: 5;
+  }
+  #ring .fg {
+    fill: none; stroke: rgba(241, 245, 249, 0.9); stroke-width: 5;
+    stroke-linecap: round;
+    stroke-dasharray: 175.93;   /* 2πr (r=28)。offset は JS が残り時間から入れる */
+  }
 </style>
 </head>
 <body>
@@ -189,6 +206,12 @@
   </div>
   <div id="slides" class="layer active"></div>
   <iframe id="notice" class="layer" title="掲示"></iframe>
+  <div id="ring" aria-hidden="true">
+    <svg viewBox="0 0 64 64">
+      <circle class="bg" cx="32" cy="32" r="28"></circle>
+      <circle class="fg" cx="32" cy="32" r="28"></circle>
+    </svg>
+  </div>
 <script>
 (function () {
   // 1 period = 表示時間の基本単位。マスタータイマーがこの間隔で刻み、
@@ -449,6 +472,7 @@
     cur.el.classList.add('show');
     current = i;
     periodsLeft = cur.periods;
+    ringStart(cur.periods * PERIOD_MS);
     advancing = false;
   }
 
@@ -727,6 +751,29 @@
     if (m !== lastMinute) { lastMinute = m; renderHeader(); }
   }, 1000);
 
+  // ---- 右下のカウントダウンリング（次の切替までの残り時間） ----
+  var ringEl = document.getElementById('ring');
+  var ringFg = ringEl.querySelector('.fg');
+  var RING_C = 2 * Math.PI * 28;   // CSS の stroke-dasharray と揃えた円周
+  var ringTotalMs = 0;             // 表示中の枠の全体時間。0 = まだ何も表示していない
+  var ringEndAt = 0;               // 切替予定時刻。period の拍ごとに実際の進行へ合わせ直す
+
+  function ringStart(totalMs) {    // 枠の表示開始で満タンから数え直す
+    ringTotalMs = totalMs;
+    ringEndAt = Date.now() + totalMs;
+  }
+  function ringResync(remainMs) {  // verify 待ち・起動タイミングによるずれを拍ごとに吸収
+    ringEndAt = Date.now() + remainMs;
+  }
+  function updateRing() {
+    var show = mode === 'normal' && current >= 0 && entries.length > 1 && ringTotalMs > 0;
+    ringEl.classList.toggle('visible', show);
+    if (!show) return;
+    var frac = Math.max(0, ringEndAt - Date.now()) / ringTotalMs;
+    ringFg.style.strokeDashoffset = String(RING_C * (1 - frac));
+  }
+  setInterval(updateRing, 200);
+
   // ---- period マスタータイマー（時間進行の唯一の源） ----
   // 毎 period で: (1) ヘッダーの拡大表示を次へ送り、(2) 表示中スライドの残り period を
   // 消費して尽きたら次の枠へ。スライド切替とヘッダー巡回が同じ拍で起きる
@@ -739,7 +786,8 @@
     if (advancing) return;                 // 切替チェーン（verify 待ち）実行中は重ねない
     if (current < 0) { showEntry(0); return; }   // 起動直後・全枠失敗後の再試行
     if (entries.length === 1) return;      // 1枠はページ自身のループに任せる
-    if (--periodsLeft <= 0) showEntry((current + 1) % entries.length);
+    if (--periodsLeft <= 0) { showEntry((current + 1) % entries.length); return; }
+    ringResync(periodsLeft * PERIOD_MS);
   }, PERIOD_MS);
 })();
 </script>
