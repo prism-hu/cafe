@@ -99,6 +99,8 @@
     border-left: 8px solid transparent; border-right: 8px solid transparent;
     border-top: 9px solid #F1F5F9;
   }
+  /* 終了済みの予定をフォーカス中はブロック側（.focused.ended = 0.55）と明度を揃える */
+  #header .caret.ended { opacity: 0.55; }
   #header .nowline {
     position: absolute; top: 16px; bottom: -2px; width: 3px;
     background: #EF4444; border-radius: 2px; z-index: 5;
@@ -535,8 +537,8 @@
     });
     html += '<div class="nowline" style="left:' + pct(nowMin) + '%"></div>';
     if (focused) {
-      html += '<div class="caret" style="left:' +
-        ((pct(focused.s) + pct(focused.e)) / 2) + '%"></div>';
+      html += '<div class="caret' + (focused.e <= nowMin ? ' ended' : '') +
+        '" style="left:' + ((pct(focused.s) + pct(focused.e)) / 2) + '%"></div>';
     }
     timelineEl.innerHTML = html;
 
