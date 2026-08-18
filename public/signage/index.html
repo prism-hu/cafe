@@ -170,16 +170,20 @@
   #slides img.cover { object-fit: cover; }
   body.with-header #slides iframe.cover { top: -70px; height: calc(100% + 140px); }
   /* 右下のカウントダウンリング: 表示中の枠の残り時間（periods × 20s）が減るほど
-     弧が痩せ、切替で満ちる。どんなポスターの上でも見えるよう半透明の座布団付き。
-     通常表示中だけ出す（掲示・臨時URL・1枠のみ・未表示中は出さない） */
+     弧が痩せ、切替で満ちる。輪だけの表示（座布団なし）。白いポスターの上でも
+     見えるよう drop-shadow で縁取る。
+     通常表示だけ出す（掲示・臨時URL・1枠のみ・未表示中は出さない） */
   #ring {
-    position: absolute; right: 24px; bottom: 24px; width: 64px; height: 64px;
+    position: absolute; right: 24px; bottom: 24px; width: 44px; height: 44px;
     z-index: 5; display: none; pointer-events: none;
   }
   #ring.visible { display: block; }
-  #ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  #ring svg {
+    width: 100%; height: 100%; transform: rotate(-90deg);
+    filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.55));
+  }
   #ring .bg {
-    fill: rgba(16, 24, 40, 0.45); stroke: rgba(241, 245, 249, 0.25); stroke-width: 5;
+    fill: none; stroke: rgba(241, 245, 249, 0.25); stroke-width: 5;
   }
   #ring .fg {
     fill: none; stroke: rgba(241, 245, 249, 0.9); stroke-width: 5;
