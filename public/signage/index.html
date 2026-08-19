@@ -140,6 +140,8 @@
   #header .focus.ended .f-time,
   #header .focus.ended .f-text { opacity: 0.55; }
   #header .f-free { font-size: 26px; font-weight: 900; color: #34D399; }
+  /* 部分利用中カードはタイムラインの部分利用ブロック（ティール）と色で対応づける */
+  #header .f-free.partial { color: #2DD4BF; }
   #header .f-free-sub { font-size: 18px; color: #94A3B8; }
   #header .qrbox {
     flex: none; display: flex; flex-direction: column; align-items: center;
@@ -594,6 +596,55 @@
     });
   }
 
+  function isLiveAt(ev, nowMin) { return ev.s <= nowMin && nowMin < ev.e; }
+
+  // 「現在の情報」カード。巡回の先頭に常設し、「いま使えるか」を一言で伝える。
+  // 状態は4つ（上から優先）:
+  //   1. 部分利用が進行中     → 「一部利用可能」（時間帯付き。いつ全部空くかが分かる）
+  //   2. これから予定がある   → 「ただいま利用可」+ 次の予定の時刻と種別（団体名は
+  //                             出さない — それは予定スロット側の役目）
+  //   3. 予定があったが全て終了 → 「予約なし・利用可」+ すべて終了
+  //   4. 終日予定なし         → 「予約なし・利用可」+ 予約なし
+  // normal モード以外ではカード自体を出さない（掲示中に「利用可」を出すと
+  // ドアの掲示と矛盾する。強制貸切・開始前バッファ中も同様）
+  function statusCard(items, nowMin) {
+    if (mode !== 'normal') return null;
+    var livePartial = items.filter(function (ev) {
+      return ev.kind === 'partial' && isLiveAt(ev, nowMin);
+    })[0];
+    if (livePartial) {
+      return {
+        card: 'partial', main: '一部利用可能',
+        sub: '部分利用中です（' + fmtMin(livePartial.s) + '–' + fmtMin(livePartial.e) + '）'
+      };
+    }
+    var next = items.filter(function (ev) { return ev.s > nowMin; })[0];
+    if (next) {
+      return {
+        card: 'free', main: 'ただいま利用可',
+        sub: '次の予定: ' + fmtMin(next.s) + '〜（' + KIND_META[next.kind].label + '）'
+      };
+    }
+    return {
+      card: 'free', main: '予約なし・利用可',
+      sub: items.length ? '本日の予定はすべて終了しました' : '本日の予約はありません'
+    };
+  }
+
+  // フォーカス巡回の並び: [現在の情報カード] → 当日の全予定（開始時刻順）。
+  // 終了済みの予定も巡回に残す — 利用実績・利用組織が透過的であるほうが
+  // 利用の心理的ハードルが下がるため。period の配分:
+  //   カード 1 / 各予定 1（終了済み含む）/ 進行中の貸切・イベントのみ連続 2。
+  //   進行中の部分利用は 1 のまま（「いま使えるか」はカードが担うため増やさない）
+  function buildFocusSlots(items, nowMin, card) {
+    var slots = card ? [card] : [];
+    items.forEach(function (ev) {
+      slots.push(ev);
+      if (isLiveAt(ev, nowMin) && ev.kind !== 'partial') slots.push(ev);
+    });
+    return slots;
+  }
+
   function renderHeader() {
     // 掲示中（private/open）もヘッダーは出す。「何時に空くか」を知らせる役目のため。
     // 出さないのは次の3つ（旧バナーの安全側挙動を引き継ぐ）:
@@ -625,18 +676,7 @@
     var items = todayData.map(function (s) {
       return { s: toMin(s.start), e: toMin(s.end), kind: s.kind, label: s.label || '' };
     });
-    // 拡大表示の巡回: 終了済みも含めた当日の全予定を開始時刻順に、各1周期ずつ表示。
-    // ただし進行中の予定は連続2周期（いま一番重要な情報のため）。
-    // これ以降の予定が無いときは「予約なし・利用可」カード（null）を1周期加える
-    var upcoming = items.filter(function (ev) { return ev.e > nowMin; });
-    var slots = [];
-    items.forEach(function (ev) {
-      slots.push(ev);
-      if (ev.s <= nowMin && nowMin < ev.e) slots.push(ev);
-    });
-    // 「予約なし・利用可」カードは通常表示のときだけ。掲示中（貸切・イベント、
-    // 強制貸切フラグ含む）に出すとドアの掲示と矛盾する
-    if (!upcoming.length && mode === 'normal') slots.push(null);
+    var slots = buildFocusSlots(items, nowMin, statusCard(items, nowMin));
     var focused = slots.length ? slots[phase % slots.length] : null;
 
     var html = '';
@@ -653,16 +693,23 @@
         KIND_META[ev.kind].color + '"></div>';
     });
     html += '<div class="nowline" style="left:' + pct(nowMin) + '%"></div>';
-    if (focused) {
+    // キャレットは予定スロットのフォーカス時のみ（カードはタイムライン上に対応物が無い）
+    if (focused && !focused.card) {
       html += '<div class="caret' + (focused.e <= nowMin ? ' ended' : '') +
         '" style="left:' + ((pct(focused.s) + pct(focused.e)) / 2) + '%"></div>';
     }
     timelineEl.innerHTML = html;
 
-    if (focused) {
+    if (focused && focused.card) {
+      focusEl.classList.remove('ended');
+      focusEl.innerHTML =
+        '<div class="f-free' + (focused.card === 'partial' ? ' partial' : '') + '">' +
+          focused.main + '</div>' +
+        '<div class="f-free-sub">' + focused.sub + '</div>';
+    } else if (focused) {
       var fMeta = KIND_META[focused.kind];
       var isEnded = focused.e <= nowMin;
-      var isLive = focused.s <= nowMin && nowMin < focused.e;
+      var isLive = isLiveAt(focused, nowMin);
       focusEl.classList.toggle('ended', isEnded);
       focusEl.innerHTML =
         '<div class="f-time">' + fmtMin(focused.s) + '–' + fmtMin(focused.e) + '</div>' +
@@ -672,9 +719,7 @@
           (isLive ? '<div class="f-live">進行中</div>' : ''));
     } else {
       focusEl.classList.remove('ended');
-      focusEl.innerHTML =
-        '<div class="f-free">予約なし・利用可</div>' +
-        '<div class="f-free-sub">本日これ以降の予約はありません</div>';
+      focusEl.innerHTML = '';
     }
   }
 
