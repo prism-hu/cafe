@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>平田先生 壮行会</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Outfit:wght@300;400;500&display=swap">
 <style>
   /* 会場の大型モニター全画面表示専用。夜空の紺に固定した単一テーマ */
   :root {
-    --ink:        #f6f2e8;  /* 温かみのある生成りの白 */
-    --ink-soft:   #cfd6e6;
-    --ink-faint:  #8d98b5;
+    --ink:        #f7f3ea;  /* 温かみのある生成りの白 */
+    --ink-soft:   #cdd5e5;
+    --ink-faint:  #808ca9;
     --ground-0:   #0c1830;  /* 深紺（中心） */
     --ground-1:   #060d1d;  /* 深紺（外縁） */
     --blue:       #6aa6f0;
@@ -24,7 +24,7 @@
   body {
     background: radial-gradient(120% 140% at 50% 42%, var(--ground-0) 0%, var(--ground-1) 100%);
     color: var(--ink);
-    font-family: 'Zen Kaku Gothic New', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+    font-family: 'Outfit', 'Hiragino Sans', 'Yu Gothic', sans-serif;
     display: grid;
     place-items: center;
   }
@@ -37,33 +37,42 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: clamp(14px, 3.2vh, 34px);
+    gap: clamp(10px, 2.6vh, 28px);
   }
 
   .eyebrow {
-    font-size: clamp(13px, 1.4vw, 22px);
-    font-weight: 500;
-    letter-spacing: .55em;
-    text-indent: .55em; /* 均等割りの右端合わせ */
+    font-size: clamp(12px, 1.15vw, 19px);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: .62em;
+    text-indent: .62em;
     color: var(--ink-faint);
   }
 
-  .name {
-    font-family: 'Shippori Mincho', 'Hiragino Mincho ProN', serif;
-    font-weight: 800;
-    font-size: clamp(44px, 8.5vw, 128px);
-    line-height: 1.25;
-    letter-spacing: .12em;
-    text-wrap: balance;
-    text-shadow: 0 0 60px rgba(106, 166, 240, .25);
+  h1 { display: contents; }
+  .congrats {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-weight: 350;
+    font-variation-settings: 'opsz' 120;
+    font-size: clamp(38px, 5.4vw, 88px);
+    line-height: 1.1;
+    letter-spacing: .01em;
+    background: linear-gradient(92deg, var(--gold) 10%, #f7e7bb 55%, var(--gold) 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 34px rgba(232, 200, 122, .22));
   }
-  .name small {
-    display: block;
-    font-size: .38em;
-    font-weight: 600;
-    letter-spacing: .3em;
-    color: var(--ink-soft);
-    margin-bottom: .5em;
+  .name {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 620;
+    font-variation-settings: 'opsz' 144;
+    font-size: clamp(56px, 9.6vw, 168px);
+    line-height: 1.04;
+    letter-spacing: .005em;
+    text-wrap: balance;
+    text-shadow: 0 0 70px rgba(106, 166, 240, .28);
   }
 
   .rule {
@@ -72,50 +81,48 @@
     border-radius: 999px;
     background: linear-gradient(90deg, var(--blue), var(--green) 50%, var(--pink));
     box-shadow: 0 0 24px rgba(123, 209, 176, .55);
+    margin-top: clamp(6px, 1.6vh, 16px);
   }
 
   .message {
-    font-family: 'Shippori Mincho', 'Hiragino Mincho ProN', serif;
-    font-weight: 600;
-    font-size: clamp(20px, 2.6vw, 40px);
-    line-height: 2.1;
-    letter-spacing: .14em;
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-weight: 340;
+    font-variation-settings: 'opsz' 60;
+    font-size: clamp(18px, 2.1vw, 34px);
+    line-height: 1.8;
+    letter-spacing: .015em;
     color: var(--ink-soft);
     text-wrap: balance;
-  }
-  .message b {
-    font-weight: 800;
-    color: var(--ink);
-    background: linear-gradient(90deg, var(--gold), #f6e3b0);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+    max-width: 34em;
   }
 
   .foot {
     display: flex;
     align-items: center;
-    gap: 12px;
-    font-size: clamp(12px, 1.2vw, 19px);
-    font-weight: 500;
-    letter-spacing: .32em;
-    text-indent: .32em;
+    gap: 14px;
+    font-size: clamp(11px, 1vw, 16px);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: .4em;
+    text-indent: .4em;
     color: var(--ink-faint);
-    margin-top: clamp(6px, 2vh, 20px);
+    margin-top: clamp(8px, 2.4vh, 24px);
   }
   .dots { display: inline-flex; gap: 7px; }
-  .dots i { width: 9px; height: 9px; border-radius: 999px; }
+  .dots i { width: 8px; height: 8px; border-radius: 999px; }
   .dots i:nth-child(1) { background: var(--blue); }
   .dots i:nth-child(2) { background: var(--green); }
   .dots i:nth-child(3) { background: var(--pink); }
 
   /* 登場の順送りフェード */
   .stage > * { opacity: 0; transform: translateY(14px); animation: rise 1.6s cubic-bezier(.2,.7,.2,1) forwards; }
-  .stage > .eyebrow { animation-delay: .3s; }
-  .stage > .name    { animation-delay: .9s; }
-  .stage > .rule    { animation-delay: 1.9s; }
-  .stage > .message { animation-delay: 2.5s; }
-  .stage > .foot    { animation-delay: 3.4s; }
+  .stage > .eyebrow  { animation-delay: .3s; }
+  .stage > .congrats { animation-delay: .9s; }
+  .stage > .name     { animation-delay: 1.5s; }
+  .stage > .rule     { animation-delay: 2.4s; }
+  .stage > .message  { animation-delay: 3s; }
+  .stage > .foot     { animation-delay: 3.9s; }
   @keyframes rise { to { opacity: 1; transform: none; } }
 
   @media (prefers-reduced-motion: reduce) {
@@ -130,11 +137,11 @@
 <canvas id="sky" aria-hidden="true"></canvas>
 
 <main class="stage">
-  <p class="eyebrow">壮行会</p>
-  <h1 class="name"><small>教授ご就任</small>平田先生<br>ご栄転おめでとうございます</h1>
+  <p class="eyebrow">Send-off Celebration</p>
+  <h1><span class="congrats">Congratulations,</span><span class="name">Professor Hirata</span></h1>
   <div class="rule"></div>
-  <p class="message">これまでのあたたかなご指導とお力添えに<br><b>心からの感謝</b>と、新天地でのご活躍への<br><b>大きな祝福</b>をこめて。</p>
-  <p class="foot"><span class="dots"><i></i><i></i><i></i></span>PRISM-HU サイエンスカフェにて<span class="dots"><i></i><i></i><i></i></span></p>
+  <p class="message">With heartfelt thanks for your guidance and kindness&nbsp;—<br>and every good wish for the journey ahead.</p>
+  <p class="foot"><span class="dots"><i></i><i></i><i></i></span>PRISM-HU Science Café<span class="dots"><i></i><i></i><i></i></span></p>
 </main>
 
 <script>
