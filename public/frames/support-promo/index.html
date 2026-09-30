@@ -1108,7 +1108,10 @@
         const supportAlpha = fadeWindow(time, 8.0, 20.35, .48, .5);
         const featuresAlpha = fadeWindow(time, 19.82, 28.45, .45, .48);
         const adminAlpha = fadeWindow(time, 27.95, 30.48, .42, .42);
-        const finalAlpha = fadeWindow(time, 30.0, 35, .45, .3);
+        // 1回再生 (?once=1、サイネージの枠表示) では最終場面をフェードアウトせず、
+        // 枠の残り時間 (40秒枠に対し 35秒尺) を締めの画面のまま保つ。
+        // ループ再生では従来どおり 35 秒で消えて先頭に戻る。
+        const finalAlpha = fadeWindow(time, 30.0, once ? Infinity : 35, .45, .3);
 
         applyScene(intro, introAlpha);
         applyScene(navScene, navAlpha, 12);
