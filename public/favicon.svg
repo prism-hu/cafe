@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">PRISM-HU サイエンスカフェ</title>
+  <rect width="64" height="64" rx="14" fill="#073A57"/>
+  <circle cx="19" cy="19.5" r="5" fill="#59B3E8"/>
+  <circle cx="32" cy="19.5" r="5" fill="#66CBB0"/>
+  <circle cx="45" cy="19.5" r="5" fill="#EEA7BD"/>
+  <ellipse cx="49" cy="41" rx="7" ry="7" fill="none" stroke="#FFFFFF" stroke-width="4"/>
+  <rect x="15" y="31" width="32" height="24" rx="12" fill="#FFFFFF"/>
+  <rect x="15" y="31" width="32" height="12" fill="#FFFFFF"/>
+</svg>
