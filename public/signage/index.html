@@ -253,8 +253,9 @@
   //   例) 01_kakenhi-ura_contain_01.jpg / 06_support-promo_cover_02.html
   // これだけが情報源で、人が編集する設定ファイルは無い。
   // .html は空ファイルのマーカーで、実体は ../frames/{name}/ にある。
+  // .gif はアニメーションのまま表示される（Drive 直リンク =w1080 を通しても GIF のまま返る。2026-11-02 確認）
   // マッチしないファイルは取り込まず console.warn で列挙する（診断用）
-  var NAME_RE = /^(\d{2})_([a-z0-9-]+)_(cover|contain)_(\d{2})\.(jpe?g|png|html)$/;
+  var NAME_RE = /^(\d{2})_([a-z0-9-]+)_(cover|contain)_(\d{2})\.(jpe?g|png|gif|html)$/;
 
   // 一覧の取得。返すのは {name, id?} の配列（id は Drive のファイル id、repo 内のときは無し）。
   // 第一情報源は Drive フォルダを列挙する GAS（SLIDES_API)。取得できない・規約名の
