@@ -60,7 +60,9 @@ gas/
 - **スライドの情報源は `slides/` のファイル名規約だけ**（人が編集する設定ファイルは無い）:
   `{slot}_{name}_{style}_{period}.{ext}` — slot は巡回順（2桁・昇順・欠番可）、
   style は `cover`（全面）/ `contain`（黒帯あり）、period は表示 period 数（2桁）、
-  ext は `jpg`/`jpeg`/`png`/`html`。例: `01_kakenhi-ura_contain_01.jpg`。
+  ext は `jpg`/`jpeg`/`png`/`gif`/`html`。例: `01_kakenhi-ura_contain_01.jpg`。
+  `gif` はアニメーションのまま流れる（Drive 直リンクの `=w1080` 縮小を通しても GIF のまま返る）。
+  period 内でループし続けるので、1 周の長さに合わせて period を決める。
   規約にマッチしないファイルは取り込まず console.warn に列挙
 - 一覧の取得: **第一情報源は Google Drive フォルダを列挙する GAS Web アプリ**
   （詳細は「[スライドの Google Drive 管理](#スライドの-google-drive-管理)」）。
